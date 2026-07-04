@@ -13,22 +13,44 @@ import PracticeScreen from './screens/PracticeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
+const SESSION_CHECK_TIMEOUT_MS = 5000;
+
+const withTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Session check timed out')), ms);
+  }),
+]);
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setCheckingSession(false);
-    });
+    let isMounted = true;
+
+    const initSession = async () => {
+      try {
+        const { data } = await withTimeout(supabase.auth.getSession(), SESSION_CHECK_TIMEOUT_MS);
+        if (isMounted) setSession(data.session);
+      } catch (error) {
+        console.log('Session check failed or timed out, falling back to Login:', error);
+        if (isMounted) setSession(null);
+      } finally {
+        if (isMounted) setCheckingSession(false);
+      }
+    };
+
+    initSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
+      if (isMounted) setSession(newSession);
     });
 
-    return () => authListener.subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   if (checkingSession) {
