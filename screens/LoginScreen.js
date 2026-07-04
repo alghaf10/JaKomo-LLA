@@ -4,6 +4,8 @@ import {
   StyleSheet, ImageBackground, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import BACKGROUNDS from '../lib/backgrounds';
+import { textShadow } from '../components/GlassCard';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -44,7 +46,7 @@ export default function LoginScreen() {
 
   return (
     <ImageBackground
-      source={{ uri: 'https://images.unsplash.com/photo-1518105779142-d975f22f1b0a?w=800' }}
+      source={BACKGROUNDS.login}
       style={styles.background}
     >
       <View style={styles.overlay}>
@@ -54,7 +56,7 @@ export default function LoginScreen() {
         >
           {/* Location pill */}
           <View style={styles.pill}>
-            <Text style={styles.pillText}>📍 Ciudad de México</Text>
+            <Text style={styles.pillText}>📍 Chichén Itzá</Text>
           </View>
 
           {/* Logo */}
@@ -111,7 +113,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   container: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   pill: {
     alignSelf: 'center',
@@ -119,10 +121,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: 20, marginBottom: 18,
   },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
   logo: {
     fontSize: 48, fontWeight: '800', color: '#fff',
-    textAlign: 'center', letterSpacing: 1,
+    textAlign: 'center', letterSpacing: 1, ...textShadow,
   },
   tagline: {
     color: 'rgba(255,255,255,0.9)', textAlign: 'center',

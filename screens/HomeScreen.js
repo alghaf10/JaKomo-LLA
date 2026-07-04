@@ -6,28 +6,26 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import orderingFoodLesson from '../content/orderingFood';
-
-const LESSONS = [
-  { id: 'ordering-food', title: 'Ordering Food', emoji: '🌮', locked: false, content: orderingFoodLesson },
-  { id: 'getting-around', title: 'Getting Around', emoji: '🚕', locked: true },
-  { id: 'at-the-market', title: 'At the Market', emoji: '🛒', locked: true },
-];
+import { getBackgrounds } from '../lib/backgrounds';
+import { getLanguage } from '../lib/languages';
+import GlassCard, { textShadow } from '../components/GlassCard';
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const [language, setLanguage] = useState(getLanguage());
   const [progressByLessonId, setProgressByLessonId] = useState({});
   const [streakDays, setStreakDays] = useState(0);
+  const [dueCount, setDueCount] = useState(0);
 
-  const handleLogout = () => {
-    supabase.auth.signOut();
-  };
+  const backgrounds = getBackgrounds(language.code);
 
   useFocusEffect(
     useCallback(() => {
       const fetchProgress = async () => {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData?.user) return;
+
+        setLanguage(getLanguage(userData.user.user_metadata?.language));
 
         const { data, error } = await supabase
           .from('lesson_progress')
@@ -47,6 +45,18 @@ export default function HomeScreen({ navigation }) {
           (data || []).map((row) => new Date(row.completed_at).toDateString()),
         );
         setStreakDays(distinctDays.size);
+
+        const { count, error: dueError } = await supabase
+          .from('review_cards')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userData.user.id)
+          .lte('due_at', new Date().toISOString());
+
+        if (dueError) {
+          console.log('Error fetching due review cards:', dueError);
+          return;
+        }
+        setDueCount(count || 0);
       };
 
       fetchProgress();
@@ -55,21 +65,24 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <ImageBackground
-      source={{ uri: 'https://images.unsplash.com/photo-1518659526054-190340b17971?w=800' }}
+      source={backgrounds.home}
       style={styles.background}
     >
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
+          <View style={[styles.flagBadge, { top: insets.top + 8 }]}>
+            <Text style={styles.flagBadgeText}>{language.flag}</Text>
+          </View>
           <TouchableOpacity
-            style={[styles.logoutBtn, { top: insets.top + 8 }]}
-            onPress={handleLogout}
+            style={[styles.settingsBtn, { top: insets.top + 8 }]}
+            onPress={() => navigation.navigate('Profile')}
           >
-            <Text style={styles.logoutBtnText}>Log out</Text>
+            <Text style={styles.settingsBtnText}>⚙️</Text>
           </TouchableOpacity>
           <ScrollView contentContainerStyle={styles.scrollContent}>
             {/* Location pill */}
             <View style={styles.pill}>
-              <Text style={styles.pillText}>📍 Oaxaca</Text>
+              <Text style={styles.pillText}>📍 Guanajuato</Text>
             </View>
 
             {/* Greeting */}
@@ -77,35 +90,67 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.subGreeting}>Ready for today's lesson?</Text>
 
             {/* Streak card */}
-            <View style={styles.streakCard}>
+            <GlassCard style={styles.streakCard}>
               <Text style={styles.streakEmoji}>🔥</Text>
               <View>
                 <Text style={styles.streakValue}>{streakDays} day streak</Text>
                 <Text style={styles.streakLabel}>Keep it going!</Text>
               </View>
-            </View>
+            </GlassCard>
+
+            {/* Practice */}
+            <TouchableOpacity
+              disabled={dueCount === 0}
+              onPress={() => navigation.navigate('Practice')}
+            >
+              <GlassCard
+                style={styles.practiceCard}
+                overlayColor={dueCount === 0 ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.12)'}
+                borderColor={dueCount === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.3)'}
+              >
+                <Text style={styles.practiceEmoji}>🧠</Text>
+                <View style={styles.practiceTextContainer}>
+                  <Text style={styles.practiceTitle}>Practice</Text>
+                  <Text style={styles.practiceSubtitle}>
+                    {dueCount > 0
+                      ? `${dueCount} card${dueCount === 1 ? '' : 's'} due for review`
+                      : 'No reviews due — come back tomorrow!'}
+                  </Text>
+                </View>
+              </GlassCard>
+            </TouchableOpacity>
 
             {/* Lessons */}
             <Text style={styles.sectionTitle}>Your Lessons</Text>
-            {LESSONS.map((lesson) => {
-              const isCompleted = Boolean(lesson.content && progressByLessonId[lesson.content.id]);
+            {language.lessons.map((lesson) => {
+              const isCompleted = Boolean(progressByLessonId[lesson.id]);
               return (
                 <TouchableOpacity
                   key={lesson.id}
-                  style={[styles.lessonCard, lesson.locked && styles.lessonCardLocked]}
-                  disabled={lesson.locked}
-                  onPress={() => navigation.navigate('Lesson', { lesson: lesson.content })}
+                  disabled={!lesson.unlocked}
+                  onPress={() => navigation.navigate('Lesson', { lesson })}
                 >
-                  <Text style={styles.lessonEmoji}>{lesson.emoji}</Text>
-                  <Text style={[styles.lessonTitle, lesson.locked && styles.lessonTitleLocked]}>
-                    {lesson.title}
-                  </Text>
-                  {isCompleted && (
-                    <View style={styles.completedBadge}>
-                      <Text style={styles.completedBadgeText}>✓</Text>
+                  <GlassCard
+                    style={styles.lessonCard}
+                    overlayColor={lesson.unlocked ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'}
+                    borderColor={lesson.unlocked ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)'}
+                  >
+                    <Text style={styles.lessonEmoji}>{lesson.emoji}</Text>
+                    <View style={styles.lessonTextContainer}>
+                      <Text style={[styles.lessonTitle, !lesson.unlocked && styles.lessonTitleLocked]}>
+                        {lesson.title}
+                      </Text>
+                      {lesson.subtitle && (
+                        <Text style={styles.lessonSubtitle}>{lesson.subtitle}</Text>
+                      )}
                     </View>
-                  )}
-                  {lesson.locked && <Text style={styles.lockIcon}>🔒</Text>}
+                    {isCompleted && (
+                      <View style={styles.completedBadge}>
+                        <Text style={styles.completedBadgeText}>✓</Text>
+                      </View>
+                    )}
+                    {!lesson.unlocked && <Text style={styles.lockIcon}>🔒</Text>}
+                  </GlassCard>
                 </TouchableOpacity>
               );
             })}
@@ -118,55 +163,66 @@ export default function HomeScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   container: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40 },
-  logoutBtn: {
-    position: 'absolute', right: 20, zIndex: 10,
+  flagBadge: {
+    position: 'absolute', left: 20, zIndex: 10,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8,
+    alignItems: 'center', justifyContent: 'center',
   },
-  logoutBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  flagBadgeText: { fontSize: 18 },
+  settingsBtn: {
+    position: 'absolute', right: 20, zIndex: 10,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  settingsBtnText: { fontSize: 16 },
   pill: {
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: 20, marginBottom: 22,
   },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
   greeting: {
     fontSize: 30, fontWeight: '800', color: '#fff',
-    letterSpacing: 0.5,
+    letterSpacing: 0.5, ...textShadow,
   },
   subGreeting: {
-    color: 'rgba(255,255,255,0.9)', fontSize: 15, marginTop: 4, marginBottom: 24,
+    color: 'rgba(255,255,255,0.9)', fontSize: 15, marginTop: 4, marginBottom: 24, ...textShadow,
   },
   streakCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 16, padding: 16, marginBottom: 30,
+    padding: 16, marginBottom: 30,
   },
   streakEmoji: { fontSize: 32, marginRight: 14 },
   streakValue: { color: '#fff', fontSize: 17, fontWeight: '700' },
   streakLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
+  practiceCard: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 16, marginBottom: 30,
+  },
+  practiceEmoji: { fontSize: 32, marginRight: 14 },
+  practiceTextContainer: { flex: 1 },
+  practiceTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  practiceSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
   sectionTitle: {
-    color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14,
+    color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14, ...textShadow,
   },
   lessonCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, padding: 16, marginBottom: 14,
-  },
-  lessonCardLocked: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderColor: 'rgba(255,255,255,0.18)',
+    padding: 16, marginBottom: 14,
   },
   lessonEmoji: { fontSize: 26, marginRight: 14 },
-  lessonTitle: { color: '#fff', fontSize: 16, fontWeight: '600', flex: 1 },
+  lessonTextContainer: { flex: 1 },
+  lessonTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
   lessonTitleLocked: { color: 'rgba(255,255,255,0.5)' },
+  lessonSubtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
   lockIcon: { fontSize: 16, marginLeft: 8 },
   completedBadge: {
     width: 24, height: 24, borderRadius: 12, marginLeft: 8,

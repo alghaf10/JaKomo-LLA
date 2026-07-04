@@ -6,8 +6,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { supabase } from './lib/supabase';
 import LoginScreen from './screens/LoginScreen';
+import LanguageSelectScreen from './screens/LanguageSelectScreen';
 import HomeScreen from './screens/HomeScreen';
 import LessonScreen from './screens/LessonScreen';
+import PracticeScreen from './screens/PracticeScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,14 +41,22 @@ export default function App() {
     );
   }
 
+  const initialAuthedRoute = session?.user?.user_metadata?.language ? 'Home' : 'LanguageSelect';
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator
+          initialRouteName={session ? initialAuthedRoute : 'Login'}
+          screenOptions={{ headerShown: false }}
+        >
           {session ? (
             <>
+              <Stack.Screen name="LanguageSelect" component={LanguageSelectScreen} />
               <Stack.Screen name="Home" component={HomeScreen} />
               <Stack.Screen name="Lesson" component={LessonScreen} />
+              <Stack.Screen name="Practice" component={PracticeScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />
