@@ -1,22 +1,28 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, TouchableOpacity,
+  View, Text, TouchableOpacity, Image,
   StyleSheet, ImageBackground, ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
-import { getLanguage } from '../lib/languages';
+import { getLanguage, getLessons } from '../content';
+import { computeStreak } from '../lib/streak';
+import { fetchProfile } from '../lib/profiles';
+import { getAvatarSource } from '../lib/avatars';
 import GlassCard, { textShadow } from '../components/GlassCard';
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const [language, setLanguage] = useState(getLanguage());
+  const [languageCode, setLanguageCode] = useState('es-MX');
+  const [profile, setProfile] = useState(null);
   const [progressByLessonId, setProgressByLessonId] = useState({});
   const [streakDays, setStreakDays] = useState(0);
   const [dueCount, setDueCount] = useState(0);
 
+  const language = getLanguage(languageCode);
+  const lessons = getLessons(languageCode);
   const backgrounds = getBackgrounds(language.code);
 
   useFocusEffect(
@@ -25,7 +31,13 @@ export default function HomeScreen({ navigation }) {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData?.user) return;
 
-        setLanguage(getLanguage(userData.user.user_metadata?.language));
+        const { data: profileData } = await fetchProfile(userData.user.id);
+        setProfile(profileData);
+
+        const activeLanguage = profileData?.active_language
+          || userData.user.user_metadata?.language
+          || 'es-MX';
+        setLanguageCode(activeLanguage);
 
         const { data, error } = await supabase
           .from('lesson_progress')
@@ -41,15 +53,13 @@ export default function HomeScreen({ navigation }) {
         (data || []).forEach((row) => { byLessonId[row.lesson_id] = row; });
         setProgressByLessonId(byLessonId);
 
-        const distinctDays = new Set(
-          (data || []).map((row) => new Date(row.completed_at).toDateString()),
-        );
-        setStreakDays(distinctDays.size);
+        setStreakDays(computeStreak((data || []).map((row) => row.completed_at)));
 
         const { count, error: dueError } = await supabase
           .from('review_cards')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userData.user.id)
+          .eq('language', activeLanguage)
           .lte('due_at', new Date().toISOString());
 
         if (dueError) {
@@ -70,9 +80,12 @@ export default function HomeScreen({ navigation }) {
     >
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
-          <View style={[styles.flagBadge, { top: insets.top + 8 }]}>
-            <Text style={styles.flagBadgeText}>{language.flag}</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.avatarBadge, { top: insets.top + 8 }]}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Image source={getAvatarSource(profile?.avatar_id)} style={styles.avatarImage} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingsBtn, { top: insets.top + 8 }]}
             onPress={() => navigation.navigate('Profile')}
@@ -86,17 +99,19 @@ export default function HomeScreen({ navigation }) {
             </View>
 
             {/* Greeting */}
-            <Text style={styles.greeting}>Welcome back!</Text>
+            <View style={styles.greetingRow}>
+              <Text style={styles.greeting}>¡Hola, {profile?.first_name || 'amigo'}!</Text>
+              <Text style={styles.greetingFlag}>{language.flag}</Text>
+            </View>
             <Text style={styles.subGreeting}>Ready for today's lesson?</Text>
 
-            {/* Streak card */}
-            <GlassCard style={styles.streakCard}>
-              <Text style={styles.streakEmoji}>🔥</Text>
-              <View>
-                <Text style={styles.streakValue}>{streakDays} day streak</Text>
-                <Text style={styles.streakLabel}>Keep it going!</Text>
-              </View>
-            </GlassCard>
+            {/* Streak pill */}
+            <TouchableOpacity onPress={() => navigation.navigate('Streak')}>
+              <GlassCard style={styles.streakPill}>
+                <Text style={styles.streakPillEmoji}>🔥</Text>
+                <Text style={styles.streakPillText}>{streakDays}</Text>
+              </GlassCard>
+            </TouchableOpacity>
 
             {/* Practice */}
             <TouchableOpacity
@@ -122,7 +137,7 @@ export default function HomeScreen({ navigation }) {
 
             {/* Lessons */}
             <Text style={styles.sectionTitle}>Your Lessons</Text>
-            {language.lessons.map((lesson) => {
+            {lessons.map((lesson) => {
               const isCompleted = Boolean(progressByLessonId[lesson.id]);
               return (
                 <TouchableOpacity
@@ -166,14 +181,13 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   container: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40 },
-  flagBadge: {
+  avatarBadge: {
     position: 'absolute', left: 20, zIndex: 10,
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
-  flagBadgeText: { fontSize: 18 },
+  avatarImage: { width: '100%', height: '100%' },
   settingsBtn: {
     position: 'absolute', right: 20, zIndex: 10,
     width: 36, height: 36, borderRadius: 18,
@@ -189,20 +203,23 @@ const styles = StyleSheet.create({
     borderRadius: 20, marginBottom: 22,
   },
   pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
+  greetingRow: {
+    flexDirection: 'row', alignItems: 'center',
+  },
   greeting: {
     fontSize: 30, fontWeight: '800', color: '#fff',
     letterSpacing: 0.5, ...textShadow,
   },
+  greetingFlag: { fontSize: 20, marginLeft: 8, ...textShadow },
   subGreeting: {
-    color: 'rgba(255,255,255,0.9)', fontSize: 15, marginTop: 4, marginBottom: 24, ...textShadow,
+    color: 'rgba(255,255,255,0.9)', fontSize: 15, marginTop: 4, marginBottom: 20, ...textShadow,
   },
-  streakCard: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 16, marginBottom: 30,
+  streakPill: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+    paddingHorizontal: 16, paddingVertical: 10, marginBottom: 24,
   },
-  streakEmoji: { fontSize: 32, marginRight: 14 },
-  streakValue: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  streakLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
+  streakPillEmoji: { fontSize: 18, marginRight: 8 },
+  streakPillText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   practiceCard: {
     flexDirection: 'row', alignItems: 'center',
     padding: 16, marginBottom: 30,

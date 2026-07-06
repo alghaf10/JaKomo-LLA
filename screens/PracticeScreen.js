@@ -8,7 +8,8 @@ import * as Speech from 'expo-speech';
 import { setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
-import { getLanguage } from '../lib/languages';
+import { getLanguage } from '../content';
+import { fetchProfile } from '../lib/profiles';
 import GlassCard, { textShadow } from '../components/GlassCard';
 
 const speak = (text, speechLanguage, rate) => {
@@ -41,13 +42,17 @@ export default function PracticeScreen({ navigation }) {
         return;
       }
 
-      setLanguage(getLanguage(userData.user.user_metadata?.language));
+      const { data: profileData } = await fetchProfile(userData.user.id);
+      const activeLanguage = profileData?.active_language
+        || userData.user.user_metadata?.language;
+      setLanguage(getLanguage(activeLanguage));
       setSpeechRate(userData.user.user_metadata?.speechRate ?? 0.85);
 
       const { data, error } = await supabase
         .from('review_cards')
         .select('*')
         .eq('user_id', userData.user.id)
+        .eq('language', getLanguage(activeLanguage).code)
         .lte('due_at', new Date().toISOString())
         .order('due_at', { ascending: true });
 
@@ -90,7 +95,8 @@ export default function PracticeScreen({ navigation }) {
       .from('review_cards')
       .update({ interval_days: newInterval, due_at: newDueAt })
       .eq('user_id', card.user_id)
-      .eq('phrase', card.phrase);
+      .eq('phrase', card.phrase)
+      .eq('language', card.language);
     if (error) console.log('Error updating review card:', error);
 
     setRevealed(false);

@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ImageBackground, KeyboardAvoidingView, Platform, ActivityIndicator,
+  StyleSheet, ImageBackground, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import BACKGROUNDS from '../lib/backgrounds';
 import { textShadow } from '../components/GlassCard';
+import AvatarPicker from '../components/AvatarPicker';
+import { createProfile } from '../lib/profiles';
 
 export default function LoginScreen() {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [firstName, setFirstName] = useState('');
+  const [avatarId, setAvatarId] = useState(1);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,18 +35,48 @@ export default function LoginScreen() {
   const handleSignUp = async () => {
     setError('');
     setInfo('');
+    if (!firstName.trim()) {
+      setError('Please enter your first name.');
+      return;
+    }
     if (!email || !password) {
       setError('Please enter your email and password.');
       return;
     }
     setLoading(true);
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
-    setLoading(false);
     if (signUpError) {
+      setLoading(false);
       setError(signUpError.message);
-    } else if (!data.session) {
+      return;
+    }
+
+    const userId = data.user?.id;
+    if (userId) {
+      const { error: profileError } = await createProfile({
+        userId,
+        firstName: firstName.trim(),
+        avatarId,
+      });
+      if (profileError) console.log('Error creating profile:', profileError);
+    }
+
+    setLoading(false);
+    if (!data.session) {
       setInfo('Check your email to confirm your account.');
     }
+  };
+
+  const switchToSignup = () => {
+    setError('');
+    setInfo('');
+    setMode('signup');
+  };
+
+  const switchToLogin = () => {
+    setError('');
+    setInfo('');
+    setMode('login');
   };
 
   return (
@@ -54,57 +89,87 @@ export default function LoginScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.container}
         >
-          {/* Location pill */}
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>📍 Chichén Itzá</Text>
-          </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Location pill */}
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>📍 Chichén Itzá</Text>
+            </View>
 
-          {/* Logo */}
-          <Text style={styles.logo}>JaKomo</Text>
-          <Text style={styles.tagline}>Learn What You Need Fast!- ¡órale!</Text>
+            {/* Logo */}
+            <Text style={styles.logo}>JaKomo</Text>
+            <Text style={styles.tagline}>Learn What You Need Fast!- ¡órale!</Text>
 
-          {/* Inputs */}
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="rgba(255,255,255,0.7)"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            editable={!loading}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="rgba(255,255,255,0.7)"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            editable={!loading}
-          />
-
-          {/* Error / info message */}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {info ? <Text style={styles.infoText}>{info}</Text> : null}
-
-          {/* Frosted glass primary button */}
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#1a1a1a" />
-            ) : (
-              <Text style={styles.primaryBtnText}>Log in</Text>
+            {mode === 'signup' && (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="First name"
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  editable={!loading}
+                />
+                <Text style={styles.sectionLabel}>Choose an avatar</Text>
+                <View style={styles.avatarPickerWrap}>
+                  <AvatarPicker selected={avatarId} onSelect={setAvatarId} />
+                </View>
+              </>
             )}
-          </TouchableOpacity>
 
-          {/* Secondary button */}
-          <TouchableOpacity style={styles.secondaryBtn} onPress={handleSignUp} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.secondaryBtnText}>Create account</Text>
-            )}
-          </TouchableOpacity>
+            {/* Inputs */}
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="rgba(255,255,255,0.7)"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!loading}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="rgba(255,255,255,0.7)"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              editable={!loading}
+            />
+
+            {/* Error / info message */}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {info ? <Text style={styles.infoText}>{info}</Text> : null}
+
+            {/* Frosted glass primary button */}
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={mode === 'login' ? handleLogin : handleSignUp}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#1a1a1a" />
+              ) : (
+                <Text style={styles.primaryBtnText}>
+                  {mode === 'login' ? 'Log in' : 'Create account'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Secondary button */}
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={mode === 'login' ? switchToSignup : switchToLogin}
+              disabled={loading}
+            >
+              <Text style={styles.secondaryBtnText}>
+                {mode === 'login' ? 'Create account' : 'Log in instead'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </KeyboardAvoidingView>
       </View>
     </ImageBackground>
@@ -114,7 +179,8 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   background: { flex: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  container: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 24 },
   pill: {
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',
@@ -130,6 +196,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)', textAlign: 'center',
     marginBottom: 36, fontSize: 15,
   },
+  sectionLabel: {
+    color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 12,
+  },
+  avatarPickerWrap: { marginBottom: 14 },
   input: {
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,

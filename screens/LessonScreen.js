@@ -8,7 +8,8 @@ import * as Speech from 'expo-speech';
 import { setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
-import { getLanguage } from '../lib/languages';
+import { getLanguage } from '../content';
+import { fetchProfile } from '../lib/profiles';
 import GlassCard, { textShadow } from '../components/GlassCard';
 
 const speak = (text, speechLanguage, rate) => {
@@ -42,10 +43,13 @@ export default function LessonScreen({ navigation, route }) {
   useEffect(() => {
     const fetchLanguage = async () => {
       const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        setLanguage(getLanguage(userData.user.user_metadata?.language));
-        setSpeechRate(userData.user.user_metadata?.speechRate ?? 0.85);
-      }
+      if (!userData?.user) return;
+
+      const { data: profileData } = await fetchProfile(userData.user.id);
+      const activeLanguage = profileData?.active_language
+        || userData.user.user_metadata?.language;
+      setLanguage(getLanguage(activeLanguage));
+      setSpeechRate(userData.user.user_metadata?.speechRate ?? 0.85);
     };
     fetchLanguage();
   }, []);
@@ -81,6 +85,7 @@ export default function LessonScreen({ navigation, route }) {
         teachSteps.map((s) => ({
           user_id: userData.user.id,
           lesson_id: lesson.id,
+          language: language.code,
           phrase: s.phrase,
           translation: s.translation,
         })),

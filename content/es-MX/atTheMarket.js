@@ -1,5 +1,6 @@
 export default {
-  id: 3,
+  id: 'es-MX/market-1',
+  lessonType: 'scenario',
   title: 'At the Market',
   location: 'Oaxaca',
   steps: [

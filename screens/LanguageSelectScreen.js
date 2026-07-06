@@ -6,15 +6,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import BACKGROUNDS from '../lib/backgrounds';
-import { LANGUAGES } from '../lib/languages';
+import { getLanguages } from '../content';
+import { updateActiveLanguage } from '../lib/profiles';
 import GlassCard, { textShadow } from '../components/GlassCard';
+
+const LANGUAGES = getLanguages();
 
 export default function LanguageSelectScreen({ navigation }) {
   const [savingCode, setSavingCode] = useState(null);
 
   const handleSelect = async (code) => {
     setSavingCode(code);
-    const { error } = await supabase.auth.updateUser({ data: { language: code } });
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) {
+      setSavingCode(null);
+      return;
+    }
+    const { error } = await updateActiveLanguage(userData.user.id, code);
     setSavingCode(null);
     if (error) {
       console.log('Error saving language selection:', error);

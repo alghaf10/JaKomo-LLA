@@ -1,5 +1,6 @@
 export default {
-  id: 1,
+  id: 'es-MX/food-1',
+  lessonType: 'scenario',
   title: 'Ordering Food',
   location: 'Mexico City',
   steps: [

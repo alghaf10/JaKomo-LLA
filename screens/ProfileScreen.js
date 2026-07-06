@@ -1,14 +1,18 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, TouchableOpacity,
+  View, Text, TouchableOpacity, TextInput, Image,
   StyleSheet, ImageBackground, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
-import { getLanguage } from '../lib/languages';
+import { getLanguage } from '../content';
+import { fetchProfile, createProfile, updateAvatar } from '../lib/profiles';
+import { getAvatarSource } from '../lib/avatars';
 import GlassCard, { textShadow } from '../components/GlassCard';
+import AvatarPicker from '../components/AvatarPicker';
 
 const formatDueLabel = (dueAt) => {
   const due = new Date(dueAt);
@@ -21,31 +25,49 @@ const formatDueLabel = (dueAt) => {
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const [userId, setUserId] = useState(null);
   const [email, setEmail] = useState('');
   const [language, setLanguage] = useState(getLanguage());
   const [speechRate, setSpeechRate] = useState(0.85);
   const [reviewCards, setReviewCards] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
 
+  const [profile, setProfile] = useState(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [draftFirstName, setDraftFirstName] = useState('');
+  const [draftAvatarId, setDraftAvatarId] = useState(1);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [copied, setCopied] = useState(false);
+
   const backgrounds = getBackgrounds(language.code);
 
   useFocusEffect(
     useCallback(() => {
-      const fetchProfile = async () => {
+      const fetchAll = async () => {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData?.user) {
           setLoadingReviews(false);
           return;
         }
 
+        setUserId(userData.user.id);
         setEmail(userData.user.email);
-        setLanguage(getLanguage(userData.user.user_metadata?.language));
         setSpeechRate(userData.user.user_metadata?.speechRate ?? 0.85);
+
+        const { data: profileData } = await fetchProfile(userData.user.id);
+        setProfile(profileData);
+        setProfileLoaded(true);
+
+        const activeLanguage = profileData?.active_language
+          || userData.user.user_metadata?.language;
+        setLanguage(getLanguage(activeLanguage));
 
         const { data, error } = await supabase
           .from('review_cards')
           .select('phrase, due_at')
           .eq('user_id', userData.user.id)
+          .eq('language', getLanguage(activeLanguage).code)
           .order('due_at', { ascending: true })
           .limit(10);
 
@@ -59,7 +81,7 @@ export default function ProfileScreen({ navigation }) {
         setLoadingReviews(false);
       };
 
-      fetchProfile();
+      fetchAll();
     }, []),
   );
 
@@ -67,6 +89,44 @@ export default function ProfileScreen({ navigation }) {
     setSpeechRate(rate);
     const { error } = await supabase.auth.updateUser({ data: { speechRate: rate } });
     if (error) console.log('Error saving speech rate:', error);
+  };
+
+  const handleChangeAvatar = async (avatarId) => {
+    if (!userId) return;
+    const { data, error } = await updateAvatar(userId, avatarId);
+    if (error) {
+      console.log('Error updating avatar:', error);
+      return;
+    }
+    setProfile(data);
+  };
+
+  const handleCompleteProfile = async () => {
+    setProfileError('');
+    if (!draftFirstName.trim()) {
+      setProfileError('Please enter your first name.');
+      return;
+    }
+    setSavingProfile(true);
+    const { data, error } = await createProfile({
+      userId,
+      firstName: draftFirstName.trim(),
+      avatarId: draftAvatarId,
+    });
+    setSavingProfile(false);
+    if (error) {
+      console.log('Error completing profile:', error);
+      setProfileError('Something went wrong. Please try again.');
+      return;
+    }
+    setProfile(data);
+  };
+
+  const handleCopyFriendCode = async () => {
+    if (!profile?.friend_code) return;
+    await Clipboard.setStringAsync(profile.friend_code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleLogout = () => {
@@ -85,6 +145,42 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent}>
+            {profile && (
+              <View style={styles.profileHeaderRow}>
+                <Image source={getAvatarSource(profile.avatar_id)} style={styles.profileAvatar} />
+                <Text style={styles.profileName}>{profile.first_name}</Text>
+              </View>
+            )}
+
+            {/* Complete your profile (old accounts with no profiles row) */}
+            {profileLoaded && !profile && (
+              <GlassCard style={styles.card}>
+                <Text style={styles.cardLabel}>Complete your profile</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="First name"
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  value={draftFirstName}
+                  onChangeText={setDraftFirstName}
+                  editable={!savingProfile}
+                />
+                <Text style={styles.avatarPickerLabel}>Choose an avatar</Text>
+                <AvatarPicker selected={draftAvatarId} onSelect={setDraftAvatarId} />
+                {profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={handleCompleteProfile}
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? (
+                    <ActivityIndicator color="#1a1a1a" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </GlassCard>
+            )}
+
             {/* Account */}
             <GlassCard style={styles.card}>
               <Text style={styles.cardLabel}>Account</Text>
@@ -94,6 +190,30 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={styles.languageName}>{language.name}</Text>
               </View>
             </GlassCard>
+
+            {/* Friend ID */}
+            {profile && (
+              <GlassCard style={styles.card}>
+                <Text style={styles.cardLabel}>Friend ID</Text>
+                <View style={styles.friendCodeRow}>
+                  <Text style={styles.friendCodeText}>{profile.friend_code}</Text>
+                  <TouchableOpacity style={styles.copyBtn} onPress={handleCopyFriendCode}>
+                    <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy'}</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.friendHintText}>
+                  Friends can find you with this ID when competitions launch
+                </Text>
+              </GlassCard>
+            )}
+
+            {/* Change avatar */}
+            {profile && (
+              <GlassCard style={styles.card}>
+                <Text style={styles.cardLabel}>Avatar</Text>
+                <AvatarPicker selected={profile.avatar_id} onSelect={handleChangeAvatar} />
+              </GlassCard>
+            )}
 
             {/* Change language */}
             <TouchableOpacity onPress={() => navigation.navigate('LanguageSelect')}>
@@ -175,6 +295,14 @@ const styles = StyleSheet.create({
   backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
   scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
+  profileHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', marginBottom: 20,
+  },
+  profileAvatar: {
+    width: 56, height: 56, borderRadius: 28, marginRight: 14,
+    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+  },
+  profileName: { color: '#fff', fontSize: 22, fontWeight: '800', ...textShadow },
   card: {
     padding: 18, marginBottom: 16,
   },
@@ -186,6 +314,33 @@ const styles = StyleSheet.create({
   languageRow: { flexDirection: 'row', alignItems: 'center' },
   languageFlag: { fontSize: 22, marginRight: 8 },
   languageName: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
+    borderRadius: 14, padding: 14, color: '#fff',
+    marginBottom: 14, fontSize: 15,
+  },
+  avatarPickerLabel: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 12 },
+  errorText: {
+    color: '#ffb4b4', fontSize: 13, fontWeight: '600', marginBottom: 12,
+  },
+  primaryBtn: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 14, padding: 14, alignItems: 'center',
+  },
+  primaryBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 15 },
+  friendCodeRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  friendCodeText: { color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: 1 },
+  copyBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
+  },
+  copyBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  friendHintText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: 18, marginBottom: 16,

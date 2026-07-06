@@ -5,12 +5,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { supabase } from './lib/supabase';
+import { fetchProfile } from './lib/profiles';
 import LoginScreen from './screens/LoginScreen';
 import LanguageSelectScreen from './screens/LanguageSelectScreen';
 import HomeScreen from './screens/HomeScreen';
 import LessonScreen from './screens/LessonScreen';
 import PracticeScreen from './screens/PracticeScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import StreakScreen from './screens/StreakScreen';
 
 const Stack = createNativeStackNavigator();
 const SESSION_CHECK_TIMEOUT_MS = 5000;
@@ -24,18 +26,41 @@ const withTimeout = (promise, ms) => Promise.race([
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [activeLanguage, setActiveLanguage] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
+    const resolveActiveLanguage = async (currentSession) => {
+      if (!currentSession?.user) {
+        if (isMounted) setActiveLanguage(null);
+        return;
+      }
+      const fallback = currentSession.user.user_metadata?.language || null;
+      try {
+        const { data: profileData } = await withTimeout(
+          fetchProfile(currentSession.user.id),
+          SESSION_CHECK_TIMEOUT_MS,
+        );
+        if (isMounted) setActiveLanguage(profileData?.active_language || fallback);
+      } catch (error) {
+        console.log('Profile check failed or timed out:', error);
+        if (isMounted) setActiveLanguage(fallback);
+      }
+    };
+
     const initSession = async () => {
       try {
         const { data } = await withTimeout(supabase.auth.getSession(), SESSION_CHECK_TIMEOUT_MS);
         if (isMounted) setSession(data.session);
+        await resolveActiveLanguage(data.session);
       } catch (error) {
         console.log('Session check failed or timed out, falling back to Login:', error);
-        if (isMounted) setSession(null);
+        if (isMounted) {
+          setSession(null);
+          setActiveLanguage(null);
+        }
       } finally {
         if (isMounted) setCheckingSession(false);
       }
@@ -44,7 +69,9 @@ export default function App() {
     initSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (isMounted) setSession(newSession);
+      if (!isMounted) return;
+      setSession(newSession);
+      resolveActiveLanguage(newSession);
     });
 
     return () => {
@@ -63,7 +90,7 @@ export default function App() {
     );
   }
 
-  const initialAuthedRoute = session?.user?.user_metadata?.language ? 'Home' : 'LanguageSelect';
+  const initialAuthedRoute = activeLanguage ? 'Home' : 'LanguageSelect';
 
   return (
     <SafeAreaProvider>
@@ -79,6 +106,7 @@ export default function App() {
               <Stack.Screen name="Lesson" component={LessonScreen} />
               <Stack.Screen name="Practice" component={PracticeScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="Streak" component={StreakScreen} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />

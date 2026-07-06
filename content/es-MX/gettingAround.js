@@ -1,5 +1,6 @@
 export default {
-  id: 2,
+  id: 'es-MX/transport-1',
+  lessonType: 'scenario',
   title: 'Getting Around',
   location: 'Mexico City',
   steps: [
