@@ -202,7 +202,7 @@ export default function ProfileScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.friendHintText}>
-                  Friends can find you with this ID when competitions launch
+                  Share this so friends can find and add you
                 </Text>
               </GlassCard>
             )}
