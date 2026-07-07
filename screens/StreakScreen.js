@@ -76,7 +76,7 @@ export default function StreakScreen({ navigation }) {
             <Text style={styles.headerTitle}>Streak</Text>
           </View>
 
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
             <GlassCard style={styles.streakCard}>
               <Text style={styles.streakEmoji}>🔥</Text>
               <Text style={styles.streakNumber}>{streak}</Text>
@@ -144,6 +144,7 @@ const styles = StyleSheet.create({
   },
   backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
   streakCard: {
     alignItems: 'center', padding: 24, marginBottom: 16,

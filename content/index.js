@@ -12,3 +12,11 @@ export const getLanguage = (code) => (
 );
 
 export const getLessons = (code) => getLanguage(code).lessons;
+
+const LESSON_ROUTES_BY_TYPE = {
+  scenario: 'Lesson',
+  numbers: 'NumbersLesson',
+  letters: 'LettersLesson',
+};
+
+export const getLessonRouteName = (lessonType) => LESSON_ROUTES_BY_TYPE[lessonType] || 'Lesson';

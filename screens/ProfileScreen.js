@@ -144,7 +144,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.headerTitle}>Profile</Text>
           </View>
 
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
             {profile && (
               <View style={styles.profileHeaderRow}>
                 <Image source={getAvatarSource(profile.avatar_id)} style={styles.profileAvatar} />
@@ -294,6 +294,7 @@ const styles = StyleSheet.create({
   },
   backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
   profileHeaderRow: {
     flexDirection: 'row', alignItems: 'center', marginBottom: 20,

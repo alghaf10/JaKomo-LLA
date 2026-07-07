@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity,
   StyleSheet, ImageBackground, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Speech from 'expo-speech';
 import { setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
@@ -34,40 +35,44 @@ export default function PracticeScreen({ navigation }) {
     return () => Speech.stop();
   }, []);
 
-  useEffect(() => {
-    const fetchDueCards = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
+  useFocusEffect(
+    useCallback(() => {
+      const fetchPracticeData = async () => {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user) {
+          setLoading(false);
+          return;
+        }
+
+        const { data: profileData } = await fetchProfile(userData.user.id);
+        const activeLanguage = profileData?.active_language
+          || userData.user.user_metadata?.language;
+        setLanguage(getLanguage(activeLanguage));
+        setSpeechRate(userData.user.user_metadata?.speechRate ?? 0.85);
+
+        const { data, error } = await supabase
+          .from('review_cards')
+          .select('*')
+          .eq('user_id', userData.user.id)
+          .eq('language', getLanguage(activeLanguage).code)
+          .lte('due_at', new Date().toISOString())
+          .order('due_at', { ascending: true });
+
+        if (error) {
+          console.log('Error fetching review cards:', error);
+          setLoading(false);
+          return;
+        }
+
+        setCards(data || []);
+        setCardIndex(0);
+        setRevealed(false);
         setLoading(false);
-        return;
-      }
+      };
 
-      const { data: profileData } = await fetchProfile(userData.user.id);
-      const activeLanguage = profileData?.active_language
-        || userData.user.user_metadata?.language;
-      setLanguage(getLanguage(activeLanguage));
-      setSpeechRate(userData.user.user_metadata?.speechRate ?? 0.85);
-
-      const { data, error } = await supabase
-        .from('review_cards')
-        .select('*')
-        .eq('user_id', userData.user.id)
-        .eq('language', getLanguage(activeLanguage).code)
-        .lte('due_at', new Date().toISOString())
-        .order('due_at', { ascending: true });
-
-      if (error) {
-        console.log('Error fetching review cards:', error);
-        setLoading(false);
-        return;
-      }
-
-      setCards(data || []);
-      setLoading(false);
-    };
-
-    fetchDueCards();
-  }, []);
+      fetchPracticeData();
+    }, []),
+  );
 
   const exitToHome = () => {
     Speech.stop();
@@ -134,64 +139,66 @@ export default function PracticeScreen({ navigation }) {
             <Text style={styles.pillText}>📍 San Miguel de Allende</Text>
           </View>
 
-          {loading ? (
-            <View style={styles.centerContainer}>
-              <ActivityIndicator color="#fff" size="large" />
-            </View>
-          ) : done ? (
-            <View style={styles.centerContainer}>
-              <Text style={styles.completeEmoji}>🎉</Text>
-              <Text style={styles.completeTitle}>All caught up!</Text>
-              <Text style={styles.completeSubtitle}>
-                You've reviewed every card that was due.
-              </Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={exitToHome}>
-                <Text style={styles.primaryBtnText}>Back to Home</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-              <Text style={styles.cardCounter}>
-                Card {cardIndex + 1} of {cards.length}
-              </Text>
-
-              <GlassCard style={styles.flashcard}>
-                <Text style={styles.translation}>{card.translation}</Text>
-                {revealed && (
-                  <View style={styles.phraseRow}>
-                    <Text style={styles.phrase}>{card.phrase}</Text>
-                    <TouchableOpacity
-                      style={styles.speakerBtn}
-                      onPress={() => speak(card.phrase, language.speechLanguage, speechRate)}
-                    >
-                      <Text style={styles.speakerBtnText}>🔊</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </GlassCard>
-
-              {revealed ? (
-                <>
-                  <Text style={styles.rateLabel}>How well did you remember it?</Text>
-                  <View style={styles.rateRow}>
-                    <TouchableOpacity style={styles.rateBtnHard} onPress={() => handleRate('hard')}>
-                      <Text style={styles.rateBtnText}>Hard</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rateBtnGood} onPress={() => handleRate('good')}>
-                      <Text style={styles.rateBtnText}>Good</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rateBtnEasy} onPress={() => handleRate('easy')}>
-                      <Text style={styles.rateBtnText}>Easy</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleReveal}>
-                  <Text style={styles.primaryBtnText}>Show answer</Text>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            {loading ? (
+              <View style={styles.loadingBlock}>
+                <ActivityIndicator color="#fff" size="large" />
+              </View>
+            ) : done ? (
+              <View style={styles.doneBlock}>
+                <Text style={styles.completeEmoji}>🎉</Text>
+                <Text style={styles.completeTitle}>All caught up!</Text>
+                <Text style={styles.completeSubtitle}>
+                  You've reviewed every card that was due.
+                </Text>
+                <TouchableOpacity style={styles.primaryBtn} onPress={exitToHome}>
+                  <Text style={styles.primaryBtnText}>Back to Home</Text>
                 </TouchableOpacity>
-              )}
-            </ScrollView>
-          )}
+              </View>
+            ) : (
+              <View style={styles.reviewBlock}>
+                <Text style={styles.cardCounter}>
+                  Card {cardIndex + 1} of {cards.length}
+                </Text>
+
+                <GlassCard style={styles.flashcard}>
+                  <Text style={styles.translation}>{card.translation}</Text>
+                  {revealed && (
+                    <View style={styles.phraseRow}>
+                      <Text style={styles.phrase}>{card.phrase}</Text>
+                      <TouchableOpacity
+                        style={styles.speakerBtn}
+                        onPress={() => speak(card.phrase, language.speechLanguage, speechRate)}
+                      >
+                        <Text style={styles.speakerBtnText}>🔊</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </GlassCard>
+
+                {revealed ? (
+                  <>
+                    <Text style={styles.rateLabel}>How well did you remember it?</Text>
+                    <View style={styles.rateRow}>
+                      <TouchableOpacity style={styles.rateBtnHard} onPress={() => handleRate('hard')}>
+                        <Text style={styles.rateBtnText}>Hard</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.rateBtnGood} onPress={() => handleRate('good')}>
+                        <Text style={styles.rateBtnText}>Good</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.rateBtnEasy} onPress={() => handleRate('easy')}>
+                        <Text style={styles.rateBtnText}>Easy</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <TouchableOpacity style={styles.primaryBtn} onPress={handleReveal}>
+                    <Text style={styles.primaryBtnText}>Show answer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </ScrollView>
         </SafeAreaView>
       </View>
     </ImageBackground>
@@ -226,10 +233,15 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   closeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  centerContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32,
+  loadingBlock: {
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 60,
   },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, flexGrow: 1 },
+  doneBlock: {
+    alignItems: 'center', paddingVertical: 40, paddingHorizontal: 8,
+  },
+  reviewBlock: {},
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 },
   cardCounter: {
     color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600', marginBottom: 24,
   },
@@ -275,6 +287,6 @@ const styles = StyleSheet.create({
   completeEmoji: { fontSize: 64, marginBottom: 16 },
   completeTitle: { fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 10 },
   completeSubtitle: {
-    fontSize: 15, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 32,
+    fontSize: 15, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 24,
   },
 });

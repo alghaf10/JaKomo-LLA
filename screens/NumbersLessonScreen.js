@@ -17,7 +17,13 @@ const speak = (text, speechLanguage, rate) => {
   Speech.speak(text, { language: speechLanguage, rate });
 };
 
-export default function LessonScreen({ navigation, route }) {
+const isOptionCorrect = (step, index) => (
+  step.type === 'listen-pick'
+    ? step.options[index] === step.correctNumber
+    : index === step.correctIndex
+);
+
+export default function NumbersLessonScreen({ navigation, route }) {
   const { lesson } = route.params;
   const steps = lesson.steps;
   const quizCount = steps.filter((s) => s.type === 'quiz').length;
@@ -60,6 +66,15 @@ export default function LessonScreen({ navigation, route }) {
   }, [stepIndex]);
 
   useEffect(() => {
+    if (step?.type === 'listen-pick') {
+      speak(step.audioText, language.speechLanguage, speechRate);
+    } else if (step?.type === 'quiz' && step.quizVariant === 'hearWordPickNumeral') {
+      speak(step.word, language.speechLanguage, speechRate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIndex]);
+
+  useEffect(() => {
     if (!finished) return;
 
     const saveProgress = async () => {
@@ -86,8 +101,8 @@ export default function LessonScreen({ navigation, route }) {
           user_id: userData.user.id,
           lesson_id: lesson.id,
           language: language.code,
-          phrase: s.phrase,
-          translation: s.translation,
+          phrase: s.word,
+          translation: String(s.number),
         })),
         { onConflict: 'user_id,phrase,language' },
       );
@@ -106,10 +121,12 @@ export default function LessonScreen({ navigation, route }) {
     if (answered) return;
     setSelectedIndex(index);
     setAnswered(true);
-    const isCorrect = index === step.correctIndex;
-    setQuizResults((prev) => (
-      prev[stepIndex] !== undefined ? prev : { ...prev, [stepIndex]: isCorrect }
-    ));
+    if (step.type === 'quiz') {
+      const isCorrect = index === step.correctIndex;
+      setQuizResults((prev) => (
+        prev[stepIndex] !== undefined ? prev : { ...prev, [stepIndex]: isCorrect }
+      ));
+    }
   };
 
   const handleContinue = () => {
@@ -126,13 +143,67 @@ export default function LessonScreen({ navigation, route }) {
     setStepIndex((prev) => Math.max(prev - 1, 0));
   };
 
-  const canContinue = step?.type === 'teach' || step?.type === 'word' || answered;
+  const canContinue = step?.type === 'teach' || answered;
+
+  const renderNumeralGrid = () => (
+    <View style={styles.numeralGrid}>
+      {step.options.map((optionValue, index) => {
+        const isCorrect = isOptionCorrect(step, index);
+        const isSelected = index === selectedIndex;
+        let overlayColor = 'rgba(255,255,255,0.12)';
+        let optionBorderColor = 'rgba(255,255,255,0.3)';
+        if (answered && isCorrect) {
+          overlayColor = 'rgba(76,217,100,0.35)';
+          optionBorderColor = 'rgba(76,217,100,0.8)';
+        } else if (answered && isSelected) {
+          overlayColor = 'rgba(255,59,48,0.35)';
+          optionBorderColor = 'rgba(255,59,48,0.8)';
+        }
+        return (
+          <TouchableOpacity
+            key={index}
+            style={styles.numeralCell}
+            onPress={() => handleAnswer(index)}
+            disabled={answered}
+          >
+            <GlassCard style={styles.numeralCard} overlayColor={overlayColor} borderColor={optionBorderColor}>
+              <Text style={styles.numeralText} adjustsFontSizeToFit numberOfLines={1}>
+                {optionValue}
+              </Text>
+            </GlassCard>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  const renderWordOptions = () => (
+    <>
+      {step.options.map((optionValue, index) => {
+        const isCorrect = index === step.correctIndex;
+        const isSelected = index === selectedIndex;
+        let overlayColor = 'rgba(255,255,255,0.12)';
+        let optionBorderColor = 'rgba(255,255,255,0.3)';
+        if (answered && isCorrect) {
+          overlayColor = 'rgba(76,217,100,0.35)';
+          optionBorderColor = 'rgba(76,217,100,0.8)';
+        } else if (answered && isSelected) {
+          overlayColor = 'rgba(255,59,48,0.35)';
+          optionBorderColor = 'rgba(255,59,48,0.8)';
+        }
+        return (
+          <TouchableOpacity key={optionValue} onPress={() => handleAnswer(index)} disabled={answered}>
+            <GlassCard style={styles.option} overlayColor={overlayColor} borderColor={optionBorderColor}>
+              <Text style={styles.optionText}>{optionValue}</Text>
+            </GlassCard>
+          </TouchableOpacity>
+        );
+      })}
+    </>
+  );
 
   return (
-    <ImageBackground
-      source={backgroundSource}
-      style={styles.background}
-    >
+    <ImageBackground source={backgroundSource} style={styles.background}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
           {!finished && (
@@ -170,79 +241,73 @@ export default function LessonScreen({ navigation, route }) {
             </View>
           ) : (
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-              {step.type === 'word' ? (
+              {step.type === 'teach' ? (
                 <>
-                  <Text style={styles.wordPhrase}>{step.phrase}</Text>
-                  <Text style={styles.translation}>{step.translation}</Text>
+                  <Text style={styles.numberDisplay} adjustsFontSizeToFit numberOfLines={1}>
+                    {step.number}
+                  </Text>
+                  <Text style={styles.wordText}>{step.word}</Text>
                   <TouchableOpacity
                     style={styles.hearBtn}
-                    onPress={() => speak(step.phrase, language.speechLanguage, speechRate)}
+                    onPress={() => speak(step.word, language.speechLanguage, speechRate)}
                   >
                     <Text style={styles.hearBtnText}>🔊 Hear it</Text>
                   </TouchableOpacity>
-                  {step.note && (
-                    <GlassCard style={styles.noteCard} overlayColor="rgba(0,0,0,0.25)">
-                      <Text style={styles.noteText}>{step.note}</Text>
+
+                  <GlassCard style={styles.exampleCard} overlayColor="rgba(0,0,0,0.25)">
+                    <Text style={styles.exampleLabel}>💬 At the market</Text>
+                    <View style={styles.exampleTextRow}>
+                      <Text style={styles.exampleText}>{step.phrase}</Text>
+                      <TouchableOpacity
+                        style={styles.speakerBtn}
+                        onPress={() => speak(step.phrase, language.speechLanguage, speechRate)}
+                      >
+                        <Text style={styles.speakerBtnText}>🔊</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.exampleTranslation}>{step.phraseTranslation}</Text>
+                  </GlassCard>
+
+                  {step.culture && (
+                    <GlassCard style={styles.cultureCard} overlayColor="rgba(0,0,0,0.25)">
+                      <Text style={styles.cultureLabel}>💡 Culture tip</Text>
+                      <Text style={styles.cultureText}>{step.culture}</Text>
                     </GlassCard>
                   )}
                 </>
-              ) : step.type === 'teach' ? (
+              ) : step.type === 'listen-pick' ? (
                 <>
-                  <Text style={styles.phrase}>{step.phrase}</Text>
-                  <Text style={styles.translation}>{step.translation}</Text>
+                  <Text style={styles.question}>Listen and pick the number</Text>
                   <TouchableOpacity
                     style={styles.hearBtn}
-                    onPress={() => speak(step.phrase, language.speechLanguage, speechRate)}
+                    onPress={() => speak(step.audioText, language.speechLanguage, speechRate)}
                   >
-                    <Text style={styles.hearBtnText}>🔊 Hear it</Text>
+                    <Text style={styles.hearBtnText}>🔊 Listen again</Text>
                   </TouchableOpacity>
-                  <GlassCard style={styles.cultureCard} overlayColor="rgba(0,0,0,0.25)">
-                    <Text style={styles.cultureLabel}>💡 Culture tip</Text>
-                    <Text style={styles.cultureText}>{step.culture}</Text>
-                  </GlassCard>
+                  {renderNumeralGrid()}
                 </>
               ) : (
                 <>
-                  <Text style={styles.question}>{step.question}</Text>
-                  {step.options.map((option, index) => {
-                    const isCorrect = index === step.correctIndex;
-                    const isSelected = index === selectedIndex;
-                    let overlayColor = 'rgba(255,255,255,0.12)';
-                    let optionBorderColor = 'rgba(255,255,255,0.3)';
-                    if (answered && isCorrect) {
-                      overlayColor = 'rgba(76,217,100,0.35)';
-                      optionBorderColor = 'rgba(76,217,100,0.8)';
-                    } else if (answered && isSelected) {
-                      overlayColor = 'rgba(255,59,48,0.35)';
-                      optionBorderColor = 'rgba(255,59,48,0.8)';
-                    }
-
-                    return (
+                  {step.quizVariant === 'seeNumeralPickWord' ? (
+                    <>
+                      <Text style={styles.numberDisplay} adjustsFontSizeToFit numberOfLines={1}>
+                        {step.number}
+                      </Text>
+                      <Text style={styles.question}>Which word is this?</Text>
+                      {renderWordOptions()}
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.question}>Which number did you hear?</Text>
                       <TouchableOpacity
-                        key={option}
-                        onPress={() => handleAnswer(index)}
-                        disabled={answered}
+                        style={styles.hearBtn}
+                        onPress={() => speak(step.word, language.speechLanguage, speechRate)}
                       >
-                        <GlassCard
-                          style={styles.option}
-                          overlayColor={overlayColor}
-                          borderColor={optionBorderColor}
-                        >
-                          <View style={styles.optionRow}>
-                            <Text style={styles.optionText}>{option}</Text>
-                            {answered && isCorrect && (
-                              <TouchableOpacity
-                                style={styles.speakerBtn}
-                                onPress={() => speak(option, language.speechLanguage, speechRate)}
-                              >
-                                <Text style={styles.speakerBtnText}>🔊</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </GlassCard>
+                        <Text style={styles.hearBtnText}>🔊 Listen again</Text>
                       </TouchableOpacity>
-                    );
-                  })}
+                      {renderNumeralGrid()}
+                    </>
+                  )}
                   {answered && (
                     <GlassCard style={styles.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
                       <Text style={styles.feedbackText}>
@@ -303,14 +368,11 @@ const styles = StyleSheet.create({
   backBtnSpacer: { width: 32, marginRight: 16 },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, flexGrow: 1 },
-  phrase: {
-    fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 10, ...textShadow,
+  numberDisplay: {
+    fontSize: 88, fontWeight: '800', color: '#fff', marginBottom: 4, ...textShadow,
   },
-  wordPhrase: {
-    fontSize: 44, fontWeight: '800', color: '#fff', marginBottom: 10, ...textShadow,
-  },
-  translation: {
-    fontSize: 16, color: 'rgba(255,255,255,0.9)', marginBottom: 20,
+  wordText: {
+    fontSize: 26, color: 'rgba(255,255,255,0.9)', marginBottom: 20, ...textShadow,
   },
   hearBtn: {
     alignSelf: 'flex-start',
@@ -320,25 +382,35 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   hearBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  exampleCard: {
+    padding: 16, marginBottom: 16,
+  },
+  exampleLabel: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
+  exampleTextRow: { flexDirection: 'row', alignItems: 'center' },
+  exampleText: { color: '#fff', fontSize: 16, fontWeight: '600', flexShrink: 1 },
+  exampleTranslation: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4 },
   cultureCard: {
     padding: 16,
   },
   cultureLabel: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
   cultureText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, lineHeight: 20 },
-  noteCard: {
-    padding: 12,
-  },
-  noteText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, lineHeight: 18 },
   question: {
-    fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 22,
+    fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 22, ...textShadow,
   },
   option: {
     padding: 16, marginBottom: 12,
   },
-  optionRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  optionText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  numeralGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
   },
-  optionText: { color: '#fff', fontSize: 16, fontWeight: '600', flexShrink: 1 },
+  numeralCell: {
+    width: '48%', marginBottom: 14,
+  },
+  numeralCard: {
+    paddingVertical: 22, alignItems: 'center', justifyContent: 'center',
+  },
+  numeralText: { color: '#fff', fontSize: 40, fontWeight: '800' },
   speakerBtn: { marginLeft: 12, padding: 4 },
   speakerBtnText: { fontSize: 18 },
   feedbackCard: {

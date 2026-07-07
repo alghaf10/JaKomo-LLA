@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
-import { getLanguage, getLessons } from '../content';
+import { getLanguage, getLessons, getLessonRouteName } from '../content';
 import { computeStreak } from '../lib/streak';
 import { fetchProfile } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
@@ -22,7 +22,11 @@ export default function HomeScreen({ navigation }) {
   const [dueCount, setDueCount] = useState(0);
 
   const language = getLanguage(languageCode);
-  const lessons = getLessons(languageCode);
+  const allLessons = getLessons(languageCode);
+  const lessons = allLessons.filter((lesson) => lesson.lessonType === 'scenario');
+  const fundamentalsLessons = allLessons.filter(
+    (lesson) => lesson.lessonType === 'numbers' || lesson.lessonType === 'letters',
+  );
   const backgrounds = getBackgrounds(language.code);
 
   useFocusEffect(
@@ -92,7 +96,7 @@ export default function HomeScreen({ navigation }) {
           >
             <Text style={styles.settingsBtnText}>⚙️</Text>
           </TouchableOpacity>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
             {/* Location pill */}
             <View style={styles.pill}>
               <Text style={styles.pillText}>📍 Guanajuato</Text>
@@ -113,27 +117,62 @@ export default function HomeScreen({ navigation }) {
               </GlassCard>
             </TouchableOpacity>
 
-            {/* Practice */}
-            <TouchableOpacity
-              disabled={dueCount === 0}
-              onPress={() => navigation.navigate('Practice')}
-            >
-              <GlassCard
-                style={styles.practiceCard}
-                overlayColor={dueCount === 0 ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.12)'}
-                borderColor={dueCount === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.3)'}
+            {/* Fundamentals */}
+            <View style={styles.fundamentalsSection}>
+              <Text style={styles.sectionTitle}>Fundamentals</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.fundamentalsRow}
               >
-                <Text style={styles.practiceEmoji}>🧠</Text>
-                <View style={styles.practiceTextContainer}>
-                  <Text style={styles.practiceTitle}>Practice</Text>
-                  <Text style={styles.practiceSubtitle}>
-                    {dueCount > 0
-                      ? `${dueCount} card${dueCount === 1 ? '' : 's'} due for review`
-                      : 'No reviews due — come back tomorrow!'}
-                  </Text>
-                </View>
-              </GlassCard>
-            </TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.navigate('Practice')}>
+                  <GlassCard style={styles.tile}>
+                    <Text style={styles.tileEmoji}>🧠</Text>
+                    <Text style={styles.tileLabel} numberOfLines={2}>Practice</Text>
+                    {dueCount > 0 && (
+                      <View style={styles.tileDueBadge}>
+                        <Text style={styles.tileBadgeText}>{dueCount}</Text>
+                      </View>
+                    )}
+                  </GlassCard>
+                </TouchableOpacity>
+
+                {fundamentalsLessons.map((lesson) => {
+                  const isCompleted = Boolean(progressByLessonId[lesson.id]);
+                  return (
+                    <TouchableOpacity
+                      key={lesson.id}
+                      disabled={!lesson.unlocked}
+                      onPress={() => navigation.navigate(getLessonRouteName(lesson.lessonType), { lesson })}
+                    >
+                      <GlassCard
+                        style={styles.tile}
+                        overlayColor={lesson.unlocked ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'}
+                        borderColor={lesson.unlocked ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)'}
+                      >
+                        <Text style={styles.tileEmoji}>{lesson.emoji}</Text>
+                        <Text
+                          style={[styles.tileLabel, !lesson.unlocked && styles.lessonTitleLocked]}
+                          numberOfLines={2}
+                        >
+                          {lesson.title}
+                        </Text>
+                        {isCompleted && (
+                          <View style={styles.tileCompletedBadge}>
+                            <Text style={styles.tileBadgeText}>✓</Text>
+                          </View>
+                        )}
+                        {!lesson.unlocked && (
+                          <View style={styles.tileLockBadge}>
+                            <Text style={styles.tileBadgeText}>🔒</Text>
+                          </View>
+                        )}
+                      </GlassCard>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
             {/* Lessons */}
             <Text style={styles.sectionTitle}>Your Lessons</Text>
@@ -143,7 +182,7 @@ export default function HomeScreen({ navigation }) {
                 <TouchableOpacity
                   key={lesson.id}
                   disabled={!lesson.unlocked}
-                  onPress={() => navigation.navigate('Lesson', { lesson })}
+                  onPress={() => navigation.navigate(getLessonRouteName(lesson.lessonType), { lesson })}
                 >
                   <GlassCard
                     style={styles.lessonCard}
@@ -180,6 +219,7 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   container: { flex: 1 },
+  scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40 },
   avatarBadge: {
     position: 'absolute', left: 20, zIndex: 10,
@@ -220,17 +260,36 @@ const styles = StyleSheet.create({
   },
   streakPillEmoji: { fontSize: 18, marginRight: 8 },
   streakPillText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  practiceCard: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 16, marginBottom: 30,
-  },
-  practiceEmoji: { fontSize: 32, marginRight: 14 },
-  practiceTextContainer: { flex: 1 },
-  practiceTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  practiceSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
   sectionTitle: {
     color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14, ...textShadow,
   },
+  fundamentalsSection: { marginBottom: 30 },
+  fundamentalsRow: { flexDirection: 'row', paddingRight: 12 },
+  tile: {
+    width: 100, height: 100, marginRight: 12,
+    alignItems: 'center', justifyContent: 'center', padding: 10,
+  },
+  tileEmoji: { fontSize: 28, marginBottom: 6 },
+  tileLabel: { color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  tileDueBadge: {
+    position: 'absolute', top: 8, right: 8,
+    minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 4,
+    backgroundColor: 'rgba(255,90,90,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tileCompletedBadge: {
+    position: 'absolute', top: 8, right: 8,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: 'rgba(76,217,100,0.9)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tileLockBadge: {
+    position: 'absolute', top: 8, right: 8,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tileBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   lessonCard: {
     flexDirection: 'row', alignItems: 'center',
     padding: 16, marginBottom: 14,

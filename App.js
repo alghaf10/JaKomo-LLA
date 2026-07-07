@@ -10,6 +10,8 @@ import LoginScreen from './screens/LoginScreen';
 import LanguageSelectScreen from './screens/LanguageSelectScreen';
 import HomeScreen from './screens/HomeScreen';
 import LessonScreen from './screens/LessonScreen';
+import NumbersLessonScreen from './screens/NumbersLessonScreen';
+import LettersLessonScreen from './screens/LettersLessonScreen';
 import PracticeScreen from './screens/PracticeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import StreakScreen from './screens/StreakScreen';
@@ -104,6 +106,8 @@ export default function App() {
               <Stack.Screen name="LanguageSelect" component={LanguageSelectScreen} />
               <Stack.Screen name="Home" component={HomeScreen} />
               <Stack.Screen name="Lesson" component={LessonScreen} />
+              <Stack.Screen name="NumbersLesson" component={NumbersLessonScreen} />
+              <Stack.Screen name="LettersLesson" component={LettersLessonScreen} />
               <Stack.Screen name="Practice" component={PracticeScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="Streak" component={StreakScreen} />

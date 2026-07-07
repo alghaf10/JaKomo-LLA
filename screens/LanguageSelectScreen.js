@@ -35,7 +35,7 @@ export default function LanguageSelectScreen({ navigation }) {
     <ImageBackground source={BACKGROUNDS.languageSelect} style={styles.background}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
             <Text style={styles.title}>Choose your language</Text>
             <Text style={styles.subtitle}>You can change this later.</Text>
 
@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   container: { flex: 1 },
+  scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 40 },
   title: {
     fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 8, ...textShadow,

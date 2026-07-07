@@ -17,7 +17,7 @@ const speak = (text, speechLanguage, rate) => {
   Speech.speak(text, { language: speechLanguage, rate });
 };
 
-export default function LessonScreen({ navigation, route }) {
+export default function LettersLessonScreen({ navigation, route }) {
   const { lesson } = route.params;
   const steps = lesson.steps;
   const quizCount = steps.filter((s) => s.type === 'quiz').length;
@@ -60,6 +60,13 @@ export default function LessonScreen({ navigation, route }) {
   }, [stepIndex]);
 
   useEffect(() => {
+    if (step?.type === 'quiz') {
+      speak(step.audioText, language.speechLanguage, speechRate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIndex]);
+
+  useEffect(() => {
     if (!finished) return;
 
     const saveProgress = async () => {
@@ -86,8 +93,8 @@ export default function LessonScreen({ navigation, route }) {
           user_id: userData.user.id,
           lesson_id: lesson.id,
           language: language.code,
-          phrase: s.phrase,
-          translation: s.translation,
+          phrase: s.example,
+          translation: s.exampleTranslation,
         })),
         { onConflict: 'user_id,phrase,language' },
       );
@@ -126,13 +133,10 @@ export default function LessonScreen({ navigation, route }) {
     setStepIndex((prev) => Math.max(prev - 1, 0));
   };
 
-  const canContinue = step?.type === 'teach' || step?.type === 'word' || answered;
+  const canContinue = step?.type === 'teach' || answered;
 
   return (
-    <ImageBackground
-      source={backgroundSource}
-      style={styles.background}
-    >
+    <ImageBackground source={backgroundSource} style={styles.background}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
           {!finished && (
@@ -170,79 +174,85 @@ export default function LessonScreen({ navigation, route }) {
             </View>
           ) : (
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-              {step.type === 'word' ? (
+              {step.type === 'teach' ? (
                 <>
-                  <Text style={styles.wordPhrase}>{step.phrase}</Text>
-                  <Text style={styles.translation}>{step.translation}</Text>
-                  <TouchableOpacity
-                    style={styles.hearBtn}
-                    onPress={() => speak(step.phrase, language.speechLanguage, speechRate)}
-                  >
-                    <Text style={styles.hearBtnText}>🔊 Hear it</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.glyphDisplay} adjustsFontSizeToFit numberOfLines={1}>
+                    {step.glyph}
+                  </Text>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.nameText}>{step.name}</Text>
+                    <TouchableOpacity
+                      style={styles.speakerBtn}
+                      onPress={() => speak(step.name, language.speechLanguage, speechRate)}
+                    >
+                      <Text style={styles.speakerBtnText}>🔊</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <GlassCard style={styles.exampleCard} overlayColor="rgba(0,0,0,0.25)">
+                    <Text style={styles.exampleLabel}>💬 Example word</Text>
+                    <View style={styles.exampleTextRow}>
+                      <Text style={styles.exampleText}>{step.example}</Text>
+                      <TouchableOpacity
+                        style={styles.speakerBtn}
+                        onPress={() => speak(step.example, language.speechLanguage, speechRate)}
+                      >
+                        <Text style={styles.speakerBtnText}>🔊</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.exampleTranslation}>{step.exampleTranslation}</Text>
+                  </GlassCard>
+
                   {step.note && (
                     <GlassCard style={styles.noteCard} overlayColor="rgba(0,0,0,0.25)">
                       <Text style={styles.noteText}>{step.note}</Text>
                     </GlassCard>
                   )}
                 </>
-              ) : step.type === 'teach' ? (
-                <>
-                  <Text style={styles.phrase}>{step.phrase}</Text>
-                  <Text style={styles.translation}>{step.translation}</Text>
-                  <TouchableOpacity
-                    style={styles.hearBtn}
-                    onPress={() => speak(step.phrase, language.speechLanguage, speechRate)}
-                  >
-                    <Text style={styles.hearBtnText}>🔊 Hear it</Text>
-                  </TouchableOpacity>
-                  <GlassCard style={styles.cultureCard} overlayColor="rgba(0,0,0,0.25)">
-                    <Text style={styles.cultureLabel}>💡 Culture tip</Text>
-                    <Text style={styles.cultureText}>{step.culture}</Text>
-                  </GlassCard>
-                </>
               ) : (
                 <>
                   <Text style={styles.question}>{step.question}</Text>
-                  {step.options.map((option, index) => {
-                    const isCorrect = index === step.correctIndex;
-                    const isSelected = index === selectedIndex;
-                    let overlayColor = 'rgba(255,255,255,0.12)';
-                    let optionBorderColor = 'rgba(255,255,255,0.3)';
-                    if (answered && isCorrect) {
-                      overlayColor = 'rgba(76,217,100,0.35)';
-                      optionBorderColor = 'rgba(76,217,100,0.8)';
-                    } else if (answered && isSelected) {
-                      overlayColor = 'rgba(255,59,48,0.35)';
-                      optionBorderColor = 'rgba(255,59,48,0.8)';
-                    }
+                  <TouchableOpacity
+                    style={styles.hearBtn}
+                    onPress={() => speak(step.audioText, language.speechLanguage, speechRate)}
+                  >
+                    <Text style={styles.hearBtnText}>🔊 Listen again</Text>
+                  </TouchableOpacity>
 
-                    return (
-                      <TouchableOpacity
-                        key={option}
-                        onPress={() => handleAnswer(index)}
-                        disabled={answered}
-                      >
-                        <GlassCard
-                          style={styles.option}
-                          overlayColor={overlayColor}
-                          borderColor={optionBorderColor}
+                  <View style={styles.glyphGrid}>
+                    {step.options.map((optionValue, index) => {
+                      const isCorrect = index === step.correctIndex;
+                      const isSelected = index === selectedIndex;
+                      let overlayColor = 'rgba(255,255,255,0.12)';
+                      let optionBorderColor = 'rgba(255,255,255,0.3)';
+                      if (answered && isCorrect) {
+                        overlayColor = 'rgba(76,217,100,0.35)';
+                        optionBorderColor = 'rgba(76,217,100,0.8)';
+                      } else if (answered && isSelected) {
+                        overlayColor = 'rgba(255,59,48,0.35)';
+                        optionBorderColor = 'rgba(255,59,48,0.8)';
+                      }
+                      return (
+                        <TouchableOpacity
+                          key={index}
+                          style={styles.glyphCell}
+                          onPress={() => handleAnswer(index)}
+                          disabled={answered}
                         >
-                          <View style={styles.optionRow}>
-                            <Text style={styles.optionText}>{option}</Text>
-                            {answered && isCorrect && (
-                              <TouchableOpacity
-                                style={styles.speakerBtn}
-                                onPress={() => speak(option, language.speechLanguage, speechRate)}
-                              >
-                                <Text style={styles.speakerBtnText}>🔊</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </GlassCard>
-                      </TouchableOpacity>
-                    );
-                  })}
+                          <GlassCard
+                            style={styles.glyphCard}
+                            overlayColor={overlayColor}
+                            borderColor={optionBorderColor}
+                          >
+                            <Text style={styles.glyphOptionText} adjustsFontSizeToFit numberOfLines={1}>
+                              {optionValue}
+                            </Text>
+                          </GlassCard>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
                   {answered && (
                     <GlassCard style={styles.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
                       <Text style={styles.feedbackText}>
@@ -303,14 +313,15 @@ const styles = StyleSheet.create({
   backBtnSpacer: { width: 32, marginRight: 16 },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, flexGrow: 1 },
-  phrase: {
-    fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 10, ...textShadow,
+  glyphDisplay: {
+    fontSize: 120, fontWeight: '800', color: '#fff', marginBottom: 4,
+    textAlign: 'center', ...textShadow,
   },
-  wordPhrase: {
-    fontSize: 44, fontWeight: '800', color: '#fff', marginBottom: 10, ...textShadow,
+  nameRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24,
   },
-  translation: {
-    fontSize: 16, color: 'rgba(255,255,255,0.9)', marginBottom: 20,
+  nameText: {
+    fontSize: 22, color: 'rgba(255,255,255,0.9)', ...textShadow,
   },
   hearBtn: {
     alignSelf: 'flex-start',
@@ -320,25 +331,30 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   hearBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  cultureCard: {
-    padding: 16,
+  exampleCard: {
+    padding: 16, marginBottom: 16,
   },
-  cultureLabel: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
-  cultureText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, lineHeight: 20 },
+  exampleLabel: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
+  exampleTextRow: { flexDirection: 'row', alignItems: 'center' },
+  exampleText: { color: '#fff', fontSize: 16, fontWeight: '600', flexShrink: 1 },
+  exampleTranslation: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4 },
   noteCard: {
     padding: 12,
   },
   noteText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, lineHeight: 18 },
   question: {
-    fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 22,
+    fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 22, ...textShadow,
   },
-  option: {
-    padding: 16, marginBottom: 12,
+  glyphGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
   },
-  optionRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  glyphCell: {
+    width: '48%', marginBottom: 14,
   },
-  optionText: { color: '#fff', fontSize: 16, fontWeight: '600', flexShrink: 1 },
+  glyphCard: {
+    paddingVertical: 22, alignItems: 'center', justifyContent: 'center',
+  },
+  glyphOptionText: { color: '#fff', fontSize: 40, fontWeight: '800' },
   speakerBtn: { marginLeft: 12, padding: 4 },
   speakerBtnText: { fontSize: 18 },
   feedbackCard: {
