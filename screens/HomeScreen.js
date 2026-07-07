@@ -111,6 +111,12 @@ export default function HomeScreen({ navigation }) {
             )}
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.groupsBtn, { top: insets.top + 8 }]}
+            onPress={() => navigation.navigate('Groups')}
+          >
+            <Text style={styles.groupsBtnText}>🫂</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.settingsBtn, { top: insets.top + 8 }]}
             onPress={() => navigation.navigate('Profile')}
           >
@@ -264,6 +270,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.2)', borderWidth: 1,
   },
   friendsBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  groupsBtn: {
+    position: 'absolute', right: 108, zIndex: 10,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  groupsBtnText: { fontSize: 16 },
   settingsBtn: {
     position: 'absolute', right: 20, zIndex: 10,
     width: 36, height: 36, borderRadius: 18,

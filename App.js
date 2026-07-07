@@ -16,6 +16,8 @@ import PracticeScreen from './screens/PracticeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import StreakScreen from './screens/StreakScreen';
 import FriendsScreen from './screens/FriendsScreen';
+import GroupsScreen from './screens/GroupsScreen';
+import GroupDetailScreen from './screens/GroupDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const SESSION_CHECK_TIMEOUT_MS = 5000;
@@ -113,6 +115,8 @@ export default function App() {
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="Streak" component={StreakScreen} />
               <Stack.Screen name="Friends" component={FriendsScreen} />
+              <Stack.Screen name="Groups" component={GroupsScreen} />
+              <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />
