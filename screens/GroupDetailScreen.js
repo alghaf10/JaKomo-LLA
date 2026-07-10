@@ -188,6 +188,15 @@ export default function GroupDetailScreen({ route, navigation }) {
                   <Text style={styles.friendHintText}>Share this so friends can join</Text>
                 </GlassCard>
 
+                <TouchableOpacity
+                  style={styles.chatBtn}
+                  onPress={() => navigation.navigate('GroupChat', {
+                    groupId, groupName: group.name, isOwner,
+                  })}
+                >
+                  <Text style={styles.chatBtnText}>💬 Chat</Text>
+                </TouchableOpacity>
+
                 {/* Owner controls */}
                 {isOwner && (
                   <GlassCard style={styles.card}>
@@ -343,6 +352,13 @@ const styles = StyleSheet.create({
   },
   copyBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   friendHintText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
+  chatBtn: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 14, paddingVertical: 14,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 16,
+  },
+  chatBtnText: { color: '#1a1a1a', fontSize: 15, fontWeight: '700' },
   searchRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   searchInput: {
     flex: 1, height: 48,

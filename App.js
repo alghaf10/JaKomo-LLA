@@ -18,6 +18,7 @@ import StreakScreen from './screens/StreakScreen';
 import FriendsScreen from './screens/FriendsScreen';
 import GroupsScreen from './screens/GroupsScreen';
 import GroupDetailScreen from './screens/GroupDetailScreen';
+import GroupChatScreen from './screens/GroupChatScreen';
 
 const Stack = createNativeStackNavigator();
 const SESSION_CHECK_TIMEOUT_MS = 5000;
@@ -117,6 +118,7 @@ export default function App() {
               <Stack.Screen name="Friends" component={FriendsScreen} />
               <Stack.Screen name="Groups" component={GroupsScreen} />
               <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
+              <Stack.Screen name="GroupChat" component={GroupChatScreen} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />
