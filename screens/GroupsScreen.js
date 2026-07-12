@@ -15,7 +15,7 @@ import {
   findGroupByCode, fetchMembership, joinGroup,
 } from '../lib/groups';
 
-export default function GroupsScreen({ navigation }) {
+export default function GroupsScreen({ navigation, headerContent }) {
   const [userId, setUserId] = useState(null);
   const [language, setLanguage] = useState(getLanguage());
   const [loading, setLoading] = useState(true);
@@ -196,10 +196,14 @@ export default function GroupsScreen({ navigation }) {
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backBtnText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Groups</Text>
+            {headerContent || (
+              <>
+                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                  <Text style={styles.backBtnText}>←</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Groups</Text>
+              </>
+            )}
           </View>
 
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>

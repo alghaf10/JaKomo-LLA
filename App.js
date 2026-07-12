@@ -8,17 +8,7 @@ import { supabase } from './lib/supabase';
 import { fetchProfile } from './lib/profiles';
 import LoginScreen from './screens/LoginScreen';
 import LanguageSelectScreen from './screens/LanguageSelectScreen';
-import HomeScreen from './screens/HomeScreen';
-import LessonScreen from './screens/LessonScreen';
-import NumbersLessonScreen from './screens/NumbersLessonScreen';
-import LettersLessonScreen from './screens/LettersLessonScreen';
-import PracticeScreen from './screens/PracticeScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import StreakScreen from './screens/StreakScreen';
-import FriendsScreen from './screens/FriendsScreen';
-import GroupsScreen from './screens/GroupsScreen';
-import GroupDetailScreen from './screens/GroupDetailScreen';
-import GroupChatScreen from './screens/GroupChatScreen';
+import MainTabs from './navigation/MainTabs';
 
 const Stack = createNativeStackNavigator();
 const SESSION_CHECK_TIMEOUT_MS = 5000;
@@ -96,7 +86,7 @@ export default function App() {
     );
   }
 
-  const initialAuthedRoute = activeLanguage ? 'Home' : 'LanguageSelect';
+  const initialAuthedRoute = activeLanguage ? 'MainTabs' : 'LanguageSelect';
 
   return (
     <SafeAreaProvider>
@@ -108,17 +98,7 @@ export default function App() {
           {session ? (
             <>
               <Stack.Screen name="LanguageSelect" component={LanguageSelectScreen} />
-              <Stack.Screen name="Home" component={HomeScreen} />
-              <Stack.Screen name="Lesson" component={LessonScreen} />
-              <Stack.Screen name="NumbersLesson" component={NumbersLessonScreen} />
-              <Stack.Screen name="LettersLesson" component={LettersLessonScreen} />
-              <Stack.Screen name="Practice" component={PracticeScreen} />
-              <Stack.Screen name="Profile" component={ProfileScreen} />
-              <Stack.Screen name="Streak" component={StreakScreen} />
-              <Stack.Screen name="Friends" component={FriendsScreen} />
-              <Stack.Screen name="Groups" component={GroupsScreen} />
-              <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
-              <Stack.Screen name="GroupChat" component={GroupChatScreen} />
+              <Stack.Screen name="MainTabs" component={MainTabs} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />

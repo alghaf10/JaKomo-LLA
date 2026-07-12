@@ -76,7 +76,7 @@ export default function PracticeScreen({ navigation }) {
 
   const exitToHome = () => {
     Speech.stop();
-    navigation.navigate('Home');
+    navigation.navigate('HomeTab');
   };
 
   const card = cards[cardIndex];

@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Image,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator,
+  StyleSheet, ImageBackground, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -11,6 +11,7 @@ import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile, createProfile, updateAvatar } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
+import { fetchBlockedUsers, unblockUser, fetchPublicProfiles } from '../lib/friends';
 import GlassCard, { textShadow } from '../components/GlassCard';
 import AvatarPicker from '../components/AvatarPicker';
 
@@ -31,6 +32,9 @@ export default function ProfileScreen({ navigation }) {
   const [speechRate, setSpeechRate] = useState(0.85);
   const [reviewCards, setReviewCards] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(true);
+  const [unblockingId, setUnblockingId] = useState(null);
 
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -79,6 +83,17 @@ export default function ProfileScreen({ navigation }) {
 
         setReviewCards(data || []);
         setLoadingReviews(false);
+
+        const { data: blockedIds, error: blockedError } = await fetchBlockedUsers(userData.user.id);
+        if (blockedError) {
+          console.log('Error fetching blocked users:', blockedError);
+          setLoadingBlocked(false);
+          return;
+        }
+        const { data: blockedProfiles, error: profilesError } = await fetchPublicProfiles(blockedIds);
+        if (profilesError) console.log('Error fetching blocked user profiles:', profilesError);
+        setBlockedUsers(blockedProfiles);
+        setLoadingBlocked(false);
       };
 
       fetchAll();
@@ -133,14 +148,34 @@ export default function ProfileScreen({ navigation }) {
     supabase.auth.signOut();
   };
 
+  const handleUnblock = (blockedProfile) => {
+    Alert.alert(
+      'Unblock',
+      `Unblock ${blockedProfile.first_name || 'this user'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock',
+          onPress: async () => {
+            setUnblockingId(blockedProfile.user_id);
+            const { error } = await unblockUser(userId, blockedProfile.user_id);
+            setUnblockingId(null);
+            if (error) {
+              console.log('Error unblocking user:', error);
+              return;
+            }
+            setBlockedUsers((prev) => prev.filter((p) => p.user_id !== blockedProfile.user_id));
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <ImageBackground source={backgrounds.home} style={styles.background}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backBtnText}>←</Text>
-            </TouchableOpacity>
             <Text style={styles.headerTitle}>Profile</Text>
           </View>
 
@@ -266,6 +301,39 @@ export default function ProfileScreen({ navigation }) {
               )}
             </GlassCard>
 
+            {/* Blocked users */}
+            <GlassCard style={styles.card}>
+              <Text style={styles.cardLabel}>Blocked users</Text>
+              {loadingBlocked ? (
+                <ActivityIndicator color="#fff" />
+              ) : blockedUsers.length === 0 ? (
+                <Text style={styles.emptyText}>You haven't blocked anyone.</Text>
+              ) : (
+                blockedUsers.map((blockedProfile) => (
+                  <View key={blockedProfile.user_id} style={styles.blockedRow}>
+                    <Image
+                      source={getAvatarSource(blockedProfile.avatar_id)}
+                      style={styles.blockedAvatar}
+                    />
+                    <Text style={styles.blockedName} numberOfLines={1}>
+                      {blockedProfile.first_name || 'Someone'}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.unblockBtn}
+                      onPress={() => handleUnblock(blockedProfile)}
+                      disabled={unblockingId === blockedProfile.user_id}
+                    >
+                      {unblockingId === blockedProfile.user_id ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.unblockBtnText}>Unblock</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </GlassCard>
+
             {/* Log out */}
             <TouchableOpacity onPress={handleLogout}>
               <GlassCard style={styles.row}>
@@ -287,12 +355,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
   },
-  backBtn: {
-    width: 32, height: 32, borderRadius: 16, marginRight: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
@@ -371,5 +433,19 @@ const styles = StyleSheet.create({
   },
   reviewPhrase: { color: '#fff', fontSize: 15, fontWeight: '600', flexShrink: 1, marginRight: 12 },
   reviewDue: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+  blockedRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
+  },
+  blockedAvatar: {
+    width: 36, height: 36, borderRadius: 18, marginRight: 12,
+    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+  },
+  blockedName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600', marginRight: 8 },
+  unblockBtn: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+  },
+  unblockBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   logoutText: { color: '#ff8080', fontSize: 16, fontWeight: '700' },
 });

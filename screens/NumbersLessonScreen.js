@@ -114,7 +114,7 @@ export default function NumbersLessonScreen({ navigation, route }) {
 
   const exitToHome = () => {
     Speech.stop();
-    navigation.navigate('Home');
+    navigation.popToTop();
   };
 
   const handleAnswer = (index) => {

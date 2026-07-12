@@ -11,7 +11,6 @@ import { getLanguage, getLessons, getLessonRouteName } from '../content';
 import { computeStreak } from '../lib/streak';
 import { fetchProfile } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
-import { fetchIncomingRequestCount } from '../lib/friends';
 import GlassCard, { textShadow } from '../components/GlassCard';
 
 export default function HomeScreen({ navigation }) {
@@ -21,7 +20,6 @@ export default function HomeScreen({ navigation }) {
   const [progressByLessonId, setProgressByLessonId] = useState({});
   const [streakDays, setStreakDays] = useState(0);
   const [dueCount, setDueCount] = useState(0);
-  const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
   const language = getLanguage(languageCode);
   const allLessons = getLessons(languageCode);
@@ -73,13 +71,6 @@ export default function HomeScreen({ navigation }) {
           return;
         }
         setDueCount(count || 0);
-
-        const { count: requestCount, error: requestError } = await fetchIncomingRequestCount(userData.user.id);
-        if (requestError) {
-          console.log('Error fetching pending friend requests:', requestError);
-          return;
-        }
-        setPendingRequestCount(requestCount);
       };
 
       fetchProgress();
@@ -95,32 +86,9 @@ export default function HomeScreen({ navigation }) {
         <SafeAreaView style={styles.container}>
           <TouchableOpacity
             style={[styles.avatarBadge, { top: insets.top + 8 }]}
-            onPress={() => navigation.navigate('Profile')}
+            onPress={() => navigation.navigate('ProfileTab')}
           >
             <Image source={getAvatarSource(profile?.avatar_id)} style={styles.avatarImage} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.friendsBtn, { top: insets.top + 8 }]}
-            onPress={() => navigation.navigate('Friends')}
-          >
-            <Text style={styles.friendsBtnText}>👥</Text>
-            {pendingRequestCount > 0 && (
-              <View style={styles.friendsBadge}>
-                <Text style={styles.friendsBadgeText}>{pendingRequestCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.groupsBtn, { top: insets.top + 8 }]}
-            onPress={() => navigation.navigate('Groups')}
-          >
-            <Text style={styles.groupsBtnText}>🫂</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.settingsBtn, { top: insets.top + 8 }]}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.settingsBtnText}>⚙️</Text>
           </TouchableOpacity>
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
             {/* Location pill */}
@@ -151,7 +119,7 @@ export default function HomeScreen({ navigation }) {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.fundamentalsRow}
               >
-                <TouchableOpacity onPress={() => navigation.navigate('Practice')}>
+                <TouchableOpacity onPress={() => navigation.navigate('PracticeTab')}>
                   <GlassCard style={styles.tile}>
                     <Text style={styles.tileEmoji}>🧠</Text>
                     <Text style={styles.tileLabel} numberOfLines={2}>Practice</Text>
@@ -254,38 +222,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  friendsBtn: {
-    position: 'absolute', right: 64, zIndex: 10,
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  friendsBtnText: { fontSize: 16 },
-  friendsBadge: {
-    position: 'absolute', top: -4, right: -4,
-    minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4,
-    backgroundColor: 'rgba(255,90,90,0.95)',
-    alignItems: 'center', justifyContent: 'center',
-    borderColor: 'rgba(0,0,0,0.2)', borderWidth: 1,
-  },
-  friendsBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  groupsBtn: {
-    position: 'absolute', right: 108, zIndex: 10,
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  groupsBtnText: { fontSize: 16 },
-  settingsBtn: {
-    position: 'absolute', right: 20, zIndex: 10,
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  settingsBtnText: { fontSize: 16 },
   pill: {
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',

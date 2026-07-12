@@ -99,7 +99,7 @@ export default function LessonScreen({ navigation, route }) {
 
   const exitToHome = () => {
     Speech.stop();
-    navigation.navigate('Home');
+    navigation.popToTop();
   };
 
   const handleAnswer = (index) => {

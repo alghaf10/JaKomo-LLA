@@ -12,13 +12,15 @@ import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
 import GlassCard, { textShadow } from '../components/GlassCard';
+import { useSocialBadge } from '../contexts/SocialBadgeContext';
 import {
   lookupProfileByFriendCode, fetchPublicProfiles, fetchFriendshipBetween,
   sendFriendRequest, acceptFriendRequest, deleteFriendship, blockUser,
   fetchIncomingRequests, fetchOutgoingRequests, fetchAcceptedFriendships,
 } from '../lib/friends';
 
-export default function FriendsScreen({ navigation }) {
+export default function FriendsScreen({ navigation, headerContent }) {
+  const { refreshPendingRequestCount } = useSocialBadge();
   const [userId, setUserId] = useState(null);
   const [language, setLanguage] = useState(getLanguage());
   const [myProfile, setMyProfile] = useState(null);
@@ -85,7 +87,8 @@ export default function FriendsScreen({ navigation }) {
     })));
 
     setLoading(false);
-  }, []);
+    refreshPendingRequestCount();
+  }, [refreshPendingRequestCount]);
 
   useFocusEffect(
     useCallback(() => {
@@ -239,10 +242,14 @@ export default function FriendsScreen({ navigation }) {
       <View style={styles.overlay}>
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backBtnText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Friends</Text>
+            {headerContent || (
+              <>
+                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                  <Text style={styles.backBtnText}>←</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Friends</Text>
+              </>
+            )}
           </View>
 
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
