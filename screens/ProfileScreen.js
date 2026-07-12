@@ -12,6 +12,7 @@ import { getLanguage } from '../content';
 import { fetchProfile, createProfile, updateAvatar } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchBlockedUsers, unblockUser, fetchPublicProfiles } from '../lib/friends';
+import { fetchMyPointsTotal } from '../lib/battles';
 import GlassCard, { textShadow } from '../components/GlassCard';
 import AvatarPicker from '../components/AvatarPicker';
 
@@ -35,6 +36,7 @@ export default function ProfileScreen({ navigation }) {
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(true);
   const [unblockingId, setUnblockingId] = useState(null);
+  const [pointsTotal, setPointsTotal] = useState(0);
 
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -94,6 +96,10 @@ export default function ProfileScreen({ navigation }) {
         if (profilesError) console.log('Error fetching blocked user profiles:', profilesError);
         setBlockedUsers(blockedProfiles);
         setLoadingBlocked(false);
+
+        const { total, error: pointsError } = await fetchMyPointsTotal(userData.user.id);
+        if (pointsError) console.log('Error fetching points total:', pointsError);
+        setPointsTotal(total);
       };
 
       fetchAll();
@@ -184,6 +190,9 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.profileHeaderRow}>
                 <Image source={getAvatarSource(profile.avatar_id)} style={styles.profileAvatar} />
                 <Text style={styles.profileName}>{profile.first_name}</Text>
+                <View style={styles.pointsPill}>
+                  <Text style={styles.pointsPillText}>⭐ {pointsTotal}</Text>
+                </View>
               </View>
             )}
 
@@ -365,7 +374,15 @@ const styles = StyleSheet.create({
     width: 56, height: 56, borderRadius: 28, marginRight: 14,
     borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
   },
-  profileName: { color: '#fff', fontSize: 22, fontWeight: '800', ...textShadow },
+  profileName: {
+    color: '#fff', fontSize: 22, fontWeight: '800', flexShrink: 1, marginRight: 10, ...textShadow,
+  },
+  pointsPill: {
+    backgroundColor: 'rgba(255,196,0,0.2)',
+    borderColor: 'rgba(255,196,0,0.6)', borderWidth: 1,
+    borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  pointsPillText: { color: '#ffc400', fontSize: 14, fontWeight: '700' },
   card: {
     padding: 18, marginBottom: 16,
   },

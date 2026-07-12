@@ -18,6 +18,7 @@ import {
   sendFriendRequest, acceptFriendRequest, deleteFriendship, blockUser,
   fetchIncomingRequests, fetchOutgoingRequests, fetchAcceptedFriendships,
 } from '../lib/friends';
+import { checkOpponentEligibility, createChallenge } from '../lib/battles';
 
 export default function FriendsScreen({ navigation, headerContent }) {
   const { refreshPendingRequestCount } = useSocialBadge();
@@ -26,6 +27,7 @@ export default function FriendsScreen({ navigation, headerContent }) {
   const [myProfile, setMyProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [battlingId, setBattlingId] = useState(null);
 
   const [codeInput, setCodeInput] = useState('');
   const [searching, setSearching] = useState(false);
@@ -237,6 +239,33 @@ export default function FriendsScreen({ navigation, headerContent }) {
     );
   };
 
+  const handleBattle = async (profile) => {
+    setBattlingId(profile.user_id);
+    const { eligible, error: eligError } = await checkOpponentEligibility(profile.user_id, language.code);
+    if (eligError) {
+      console.log('Error checking battle eligibility:', eligError);
+      setBattlingId(null);
+      Alert.alert('Something went wrong', 'Please try again.');
+      return;
+    }
+    if (!eligible) {
+      setBattlingId(null);
+      Alert.alert('Not ready yet', `${profile.first_name || 'They'} haven't learned enough words to battle yet!`);
+      return;
+    }
+
+    const { error: createError } = await createChallenge({
+      opponentId: profile.user_id, language: language.code,
+    });
+    setBattlingId(null);
+    if (createError) {
+      console.log('Error creating challenge:', createError);
+      Alert.alert('Something went wrong', 'Please try again.');
+      return;
+    }
+    Alert.alert('Challenge sent!', `${profile.first_name || 'They'} will see it in Battles.`);
+  };
+
   return (
     <ImageBackground source={backgrounds.home} style={styles.background}>
       <View style={styles.overlay}>
@@ -384,6 +413,17 @@ export default function FriendsScreen({ navigation, headerContent }) {
                     </View>
                     <View style={styles.actionRow}>
                       <TouchableOpacity
+                        style={styles.battleBtn}
+                        onPress={() => handleBattle(profile)}
+                        disabled={battlingId === profile?.user_id}
+                      >
+                        {battlingId === profile?.user_id ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={styles.battleBtnText}>⚔️ Battle</Text>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
                         style={styles.neutralBtn}
                         onPress={() => handleUnfriend(friendship, profile)}
                         disabled={actioningId === friendship.id}
@@ -492,6 +532,12 @@ const styles = StyleSheet.create({
     borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
   },
   acceptBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  battleBtn: {
+    backgroundColor: 'rgba(255,196,0,0.2)',
+    borderColor: 'rgba(255,196,0,0.6)', borderWidth: 1,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+  },
+  battleBtnText: { color: '#ffc400', fontSize: 12, fontWeight: '700' },
   neutralBtn: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,

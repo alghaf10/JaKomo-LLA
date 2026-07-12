@@ -14,6 +14,7 @@ import PracticeScreen from '../screens/PracticeScreen';
 import SocialScreen from '../screens/SocialScreen';
 import GroupDetailScreen from '../screens/GroupDetailScreen';
 import GroupChatScreen from '../screens/GroupChatScreen';
+import BattleScreen from '../screens/BattleScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { SocialBadgeProvider, useSocialBadge } from '../contexts/SocialBadgeContext';
 
@@ -23,7 +24,7 @@ const SocialStack = createNativeStackNavigator();
 
 // Screens that take over the full screen and hide the tab bar while focused.
 const HOME_HIDDEN_ROUTES = ['Lesson', 'NumbersLesson', 'LettersLesson'];
-const SOCIAL_HIDDEN_ROUTES = ['GroupChat'];
+const SOCIAL_HIDDEN_ROUTES = ['GroupChat', 'Battle'];
 
 const TAB_ICONS = {
   HomeTab: '🏠',
@@ -68,6 +69,7 @@ function SocialStackScreen() {
       <SocialStack.Screen name="SocialIndex" component={SocialScreen} />
       <SocialStack.Screen name="GroupDetail" component={GroupDetailScreen} />
       <SocialStack.Screen name="GroupChat" component={GroupChatScreen} />
+      <SocialStack.Screen name="Battle" component={BattleScreen} />
     </SocialStack.Navigator>
   );
 }
