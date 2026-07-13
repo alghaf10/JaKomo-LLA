@@ -10,6 +10,7 @@ import GlassCard, { textShadow } from '../components/GlassCard';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import { updateOnboarding, resolveAuthedRoute } from '../lib/profiles';
 import { estimateWeeks, suggestNextTier } from '../lib/onboarding';
+import { generateLearningPlan } from '../lib/learningPlan';
 
 const LEVEL_LABELS = {
   beginner: 'Complete beginner',
@@ -33,6 +34,7 @@ const formatDate = (dateString) => new Date(`${dateString}T00:00:00`).toLocaleDa
 export default function OnboardingSummaryScreen({ navigation }) {
   const { levelEstimate, goal, goalDate, dailyMinutes } = useOnboarding();
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
 
   const weeks = estimateWeeks(levelEstimate, dailyMinutes);
@@ -71,6 +73,14 @@ export default function OnboardingSummaryScreen({ navigation }) {
       setError('Something went wrong. Please try again.');
       return;
     }
+
+    // Kick off plan generation with its own visible state (the Gemini call
+    // takes several seconds — make it feel intentional). Success or failure,
+    // we still proceed: they're onboarded, and Home has a fallback to
+    // generate the plan if this didn't land.
+    setGenerating(true);
+    const { error: planError } = await generateLearningPlan();
+    if (planError) console.log('Plan generation failed (Home fallback will offer it):', planError);
 
     // Leave the onboarding subtree entirely (reset, so Back can't return
     // here) via the root navigator.
@@ -130,18 +140,25 @@ export default function OnboardingSummaryScreen({ navigation }) {
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </ScrollView>
 
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} disabled={saving}>
-              <Text style={styles.backBtnText}>Back</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.nextBtn} onPress={handleFinish} disabled={saving}>
-              {saving ? (
-                <ActivityIndicator color="#1a1a1a" />
-              ) : (
-                <Text style={styles.nextBtnText}>Looks good, let's go!</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          {generating ? (
+            <View style={styles.generatingRow}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.generatingText}>Building your personalized plan…</Text>
+            </View>
+          ) : (
+            <View style={styles.footer}>
+              <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} disabled={saving}>
+                <Text style={styles.backBtnText}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.nextBtn} onPress={handleFinish} disabled={saving}>
+                {saving ? (
+                  <ActivityIndicator color="#1a1a1a" />
+                ) : (
+                  <Text style={styles.nextBtnText}>Looks good, let's go!</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </SafeAreaView>
       </View>
     </ImageBackground>
@@ -171,6 +188,11 @@ const styles = StyleSheet.create({
   noteCard: { padding: 16, marginBottom: 16 },
   noteText: { color: '#fff', fontSize: 14, fontWeight: '600', lineHeight: 20 },
   errorText: { color: '#ffb4b4', fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  generatingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
+    paddingHorizontal: 24, paddingTop: 8, paddingBottom: 20,
+  },
+  generatingText: { color: '#fff', fontSize: 15, fontWeight: '600', ...textShadow },
   footer: {
     flexDirection: 'row', gap: 12,
     paddingHorizontal: 24, paddingTop: 8, paddingBottom: 16,

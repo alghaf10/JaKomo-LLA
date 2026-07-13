@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Image,
+  View, Text, TouchableOpacity, Image, Alert, ActivityIndicator,
   StyleSheet, ImageBackground, ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { getLanguage, getLessons, getLessonRouteName } from '../content';
 import { computeStreak } from '../lib/streak';
 import { fetchProfile } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
+import { fetchLearningPlan, generateLearningPlan, shouldOfferRegeneration } from '../lib/learningPlan';
 import GlassCard, { textShadow } from '../components/GlassCard';
 
 export default function HomeScreen({ navigation }) {
@@ -20,6 +21,9 @@ export default function HomeScreen({ navigation }) {
   const [progressByLessonId, setProgressByLessonId] = useState({});
   const [streakDays, setStreakDays] = useState(0);
   const [dueCount, setDueCount] = useState(0);
+  const [plan, setPlan] = useState(null);
+  const [planRegenHint, setPlanRegenHint] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
 
   const language = getLanguage(languageCode);
   const allLessons = getLessons(languageCode);
@@ -71,11 +75,32 @@ export default function HomeScreen({ navigation }) {
           return;
         }
         setDueCount(count || 0);
+
+        const { data: planData } = await fetchLearningPlan(userData.user.id, activeLanguage);
+        setPlan(planData);
+        setPlanRegenHint(shouldOfferRegeneration(planData, profileData));
       };
 
       fetchProgress();
     }, []),
   );
+
+  const handleGeneratePlan = async () => {
+    if (generatingPlan) return;
+    setGeneratingPlan(true);
+    const { plan: newPlan, error } = await generateLearningPlan();
+    setGeneratingPlan(false);
+    if (error) {
+      Alert.alert('Something went wrong', error);
+      return;
+    }
+    if (newPlan) {
+      setPlan(newPlan);
+      setPlanRegenHint(false);
+    }
+  };
+
+  const nextMilestone = plan?.plan_json?.milestones?.[0] || null;
 
   return (
     <ImageBackground
@@ -110,6 +135,44 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.streakPillText}>{streakDays}</Text>
               </GlassCard>
             </TouchableOpacity>
+
+            {/* Learning plan */}
+            {plan?.plan_json ? (
+              <TouchableOpacity onPress={() => navigation.navigate('LearningPlan')}>
+                <GlassCard style={styles.planCard}>
+                  <View style={styles.planHeaderRow}>
+                    <Text style={styles.planLabel}>Your plan</Text>
+                    {planRegenHint && (
+                      <View style={styles.planHintBadge}>
+                        <Text style={styles.planHintText}>Your goals changed — refresh</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.planSummary} numberOfLines={2}>{plan.plan_json.summary}</Text>
+                  {nextMilestone && (
+                    <Text style={styles.planMilestone} numberOfLines={1}>
+                      Next: Week {nextMilestone.week} · {nextMilestone.title}
+                    </Text>
+                  )}
+                </GlassCard>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={handleGeneratePlan} disabled={generatingPlan}>
+                <GlassCard style={styles.planCard}>
+                  {generatingPlan ? (
+                    <View style={styles.planGeneratingRow}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={styles.planGeneratingText}>Building your personalized plan…</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={styles.planLabel}>Your plan</Text>
+                      <Text style={styles.planSummary}>Generate your personalized learning plan ✨</Text>
+                    </>
+                  )}
+                </GlassCard>
+              </TouchableOpacity>
+            )}
 
             {/* Fundamentals */}
             <View style={styles.fundamentalsSection}>
@@ -292,4 +355,22 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   completedBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  planCard: { padding: 18, marginBottom: 24 },
+  planHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
+  },
+  planLabel: {
+    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  planHintBadge: {
+    backgroundColor: 'rgba(255,196,0,0.2)',
+    borderColor: 'rgba(255,196,0,0.6)', borderWidth: 1,
+    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  planHintText: { color: '#ffd24a', fontSize: 11, fontWeight: '700' },
+  planSummary: { color: '#fff', fontSize: 15, fontWeight: '600', lineHeight: 21 },
+  planMilestone: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', marginTop: 8 },
+  planGeneratingRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  planGeneratingText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
