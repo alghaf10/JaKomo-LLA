@@ -7,10 +7,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import BACKGROUNDS from '../lib/backgrounds';
 import { getLanguages } from '../content';
-import { updateActiveLanguage } from '../lib/profiles';
+import { updateActiveLanguage, resolveAuthedRoute } from '../lib/profiles';
 import GlassCard, { textShadow } from '../components/GlassCard';
 
 const LANGUAGES = getLanguages();
+const SAVE_TIMEOUT_MS = 5000;
+
+const withTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Language save timed out')), ms);
+  }),
+]);
 
 export default function LanguageSelectScreen({ navigation }) {
   const [savingCode, setSavingCode] = useState(null);
@@ -22,13 +30,24 @@ export default function LanguageSelectScreen({ navigation }) {
       setSavingCode(null);
       return;
     }
-    const { error } = await updateActiveLanguage(userData.user.id, code);
-    setSavingCode(null);
-    if (error) {
-      console.log('Error saving language selection:', error);
-      return;
+    // Navigate even if the save fails or hangs: Home falls back to es-MX
+    // (the only selectable language), and the setting can be retried from
+    // Profile — being stranded on this screen is the worse outcome. On a
+    // clean save, route onward via the resolver so a first-run user lands in
+    // Onboarding while an established user (changing language from Profile)
+    // returns straight to MainTabs. If the save fails/times out we can't
+    // read the profile, so fall back to MainTabs; App.js re-resolves and
+    // catches any still-missing onboarding on next launch.
+    let nextRoute = 'MainTabs';
+    try {
+      const { data, error } = await withTimeout(updateActiveLanguage(userData.user.id, code), SAVE_TIMEOUT_MS);
+      if (error) console.log('Error saving language selection:', error);
+      if (data) nextRoute = resolveAuthedRoute(data);
+    } catch (error) {
+      console.log('Language save failed or timed out:', error);
     }
-    navigation.replace('Home');
+    setSavingCode(null);
+    navigation.replace(nextRoute);
   };
 
   return (

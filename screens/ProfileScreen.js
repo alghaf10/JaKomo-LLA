@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Image,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator, Alert,
+  StyleSheet, ImageBackground, ScrollView, ActivityIndicator, Alert, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,12 +9,13 @@ import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
-import { fetchProfile, createProfile, updateAvatar } from '../lib/profiles';
+import { fetchProfile, createProfile, updateAvatar, updateDiscoverable } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchBlockedUsers, unblockUser, fetchPublicProfiles } from '../lib/friends';
 import { fetchMyPointsTotal } from '../lib/battles';
 import GlassCard, { textShadow } from '../components/GlassCard';
 import AvatarPicker from '../components/AvatarPicker';
+import UsernameField from '../components/UsernameField';
 
 const formatDueLabel = (dueAt) => {
   const due = new Date(dueAt);
@@ -41,10 +42,13 @@ export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [draftFirstName, setDraftFirstName] = useState('');
+  const [draftUsername, setDraftUsername] = useState('');
+  const [draftUsernameStatus, setDraftUsernameStatus] = useState('idle');
   const [draftAvatarId, setDraftAvatarId] = useState(1);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [savingDiscoverable, setSavingDiscoverable] = useState(false);
 
   const backgrounds = getBackgrounds(language.code);
 
@@ -128,16 +132,45 @@ export default function ProfileScreen({ navigation }) {
       setProfileError('Please enter your first name.');
       return;
     }
+    if (draftUsernameStatus !== 'available') {
+      setProfileError(
+        draftUsernameStatus === 'checking'
+          ? 'One moment — still checking that username.'
+          : 'Please choose an available username.',
+      );
+      return;
+    }
     setSavingProfile(true);
-    const { data, error } = await createProfile({
+    const { data, error, usernameTaken } = await createProfile({
       userId,
       firstName: draftFirstName.trim(),
       avatarId: draftAvatarId,
+      username: draftUsername.trim(),
     });
     setSavingProfile(false);
+    if (usernameTaken) {
+      setProfileError('Someone just took that username — try another.');
+      return;
+    }
     if (error) {
       console.log('Error completing profile:', error);
       setProfileError('Something went wrong. Please try again.');
+      return;
+    }
+    setProfile(data);
+  };
+
+  const handleToggleDiscoverable = async (value) => {
+    if (!userId || savingDiscoverable) return;
+    setSavingDiscoverable(true);
+    // Optimistic flip; revert if the write fails.
+    const previous = profile;
+    setProfile((prev) => (prev ? { ...prev, discoverable: value } : prev));
+    const { data, error } = await updateDiscoverable(userId, value);
+    setSavingDiscoverable(false);
+    if (error) {
+      console.log('Error updating discoverable:', error);
+      setProfile(previous);
       return;
     }
     setProfile(data);
@@ -189,7 +222,12 @@ export default function ProfileScreen({ navigation }) {
             {profile && (
               <View style={styles.profileHeaderRow}>
                 <Image source={getAvatarSource(profile.avatar_id)} style={styles.profileAvatar} />
-                <Text style={styles.profileName}>{profile.first_name}</Text>
+                <View style={styles.profileNameCol}>
+                  <Text style={styles.profileName}>{profile.first_name}</Text>
+                  {profile.username ? (
+                    <Text style={styles.profileUsername} numberOfLines={1}>@{profile.username}</Text>
+                  ) : null}
+                </View>
                 <View style={styles.pointsPill}>
                   <Text style={styles.pointsPillText}>⭐ {pointsTotal}</Text>
                 </View>
@@ -207,6 +245,12 @@ export default function ProfileScreen({ navigation }) {
                   value={draftFirstName}
                   onChangeText={setDraftFirstName}
                   editable={!savingProfile}
+                />
+                <UsernameField
+                  value={draftUsername}
+                  onChangeText={setDraftUsername}
+                  editable={!savingProfile}
+                  onStatusChange={setDraftUsernameStatus}
                 />
                 <Text style={styles.avatarPickerLabel}>Choose an avatar</Text>
                 <AvatarPicker selected={draftAvatarId} onSelect={setDraftAvatarId} />
@@ -248,6 +292,29 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={styles.friendHintText}>
                   Share this so friends can find and add you
                 </Text>
+              </GlassCard>
+            )}
+
+            {/* Privacy */}
+            {profile && (
+              <GlassCard style={styles.card}>
+                <Text style={styles.cardLabel}>Privacy</Text>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingTitle}>Discoverable by username</Text>
+                    <Text style={styles.settingHint}>
+                      When off, nobody can find you by searching your username. Friend codes still
+                      work.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={profile.discoverable !== false}
+                    onValueChange={handleToggleDiscoverable}
+                    disabled={savingDiscoverable}
+                    trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(76,217,100,0.7)' }}
+                    thumbColor="#fff"
+                  />
+                </View>
               </GlassCard>
             )}
 
@@ -374,9 +441,15 @@ const styles = StyleSheet.create({
     width: 56, height: 56, borderRadius: 28, marginRight: 14,
     borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
   },
+  profileNameCol: { flex: 1, marginRight: 10 },
   profileName: {
-    color: '#fff', fontSize: 22, fontWeight: '800', flexShrink: 1, marginRight: 10, ...textShadow,
+    color: '#fff', fontSize: 22, fontWeight: '800', ...textShadow,
   },
+  profileUsername: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 2 },
+  settingRow: { flexDirection: 'row', alignItems: 'center' },
+  settingInfo: { flex: 1, marginRight: 12 },
+  settingTitle: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  settingHint: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 3, lineHeight: 17 },
   pointsPill: {
     backgroundColor: 'rgba(255,196,0,0.2)',
     borderColor: 'rgba(255,196,0,0.6)', borderWidth: 1,

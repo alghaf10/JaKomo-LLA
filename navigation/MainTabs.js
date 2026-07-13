@@ -75,7 +75,7 @@ function SocialStackScreen() {
 }
 
 function MainTabsNavigator() {
-  const { pendingRequestCount } = useSocialBadge();
+  const { badgeTotal } = useSocialBadge();
 
   return (
     <Tab.Navigator
@@ -106,7 +106,7 @@ function MainTabsNavigator() {
         component={SocialStackScreen}
         options={({ route }) => ({
           title: 'Social',
-          tabBarBadge: pendingRequestCount > 0 ? pendingRequestCount : undefined,
+          tabBarBadge: badgeTotal > 0 ? badgeTotal : undefined,
           tabBarStyle: tabBarStyleForRoute(route, SOCIAL_HIDDEN_ROUTES),
         })}
       />

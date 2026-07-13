@@ -12,12 +12,14 @@ import { fetchProfile } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchPublicProfiles } from '../lib/friends';
 import GlassCard, { textShadow } from '../components/GlassCard';
+import { useSocialBadge } from '../contexts/SocialBadgeContext';
 import {
   fetchIncomingChallenges, fetchMyActiveBattles, fetchFinishedBattles,
   fetchPlayersForBattles, acceptChallenge, declineChallenge,
 } from '../lib/battles';
 
 export default function BattlesScreen({ navigation, headerContent }) {
+  const { refreshBattleAwaitingCount } = useSocialBadge();
   const [userId, setUserId] = useState(null);
   const [language, setLanguage] = useState(getLanguage());
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,8 @@ export default function BattlesScreen({ navigation, headerContent }) {
     setFinishedBattles(finished.map(withOpponent));
 
     setLoading(false);
-  }, []);
+    refreshBattleAwaitingCount();
+  }, [refreshBattleAwaitingCount]);
 
   useFocusEffect(
     useCallback(() => {
@@ -204,7 +207,9 @@ export default function BattlesScreen({ navigation, headerContent }) {
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Finished</Text>
                     {finishedBattles.map((battle) => {
-                      const won = battle.winner_side === battle.mySide;
+                      const outcome = battle.winner_side === null
+                        ? 'tie'
+                        : battle.winner_side === battle.mySide ? 'won' : 'lost';
                       return (
                         <TouchableOpacity
                           key={battle.id}
@@ -220,9 +225,21 @@ export default function BattlesScreen({ navigation, headerContent }) {
                                 {battle.opponent?.first_name || 'Someone'}
                               </Text>
                             </View>
-                            <View style={won ? styles.wonBadge : styles.lostBadge}>
-                              <Text style={won ? styles.wonBadgeText : styles.lostBadgeText}>
-                                {won ? 'Won' : 'Lost'}
+                            <View
+                              style={
+                                outcome === 'won' ? styles.wonBadge
+                                  : outcome === 'lost' ? styles.lostBadge
+                                    : styles.tieBadge
+                              }
+                            >
+                              <Text
+                                style={
+                                  outcome === 'won' ? styles.wonBadgeText
+                                    : outcome === 'lost' ? styles.lostBadgeText
+                                      : styles.tieBadgeText
+                                }
+                              >
+                                {outcome === 'won' ? 'Won' : outcome === 'lost' ? 'Lost' : 'Tie'}
                               </Text>
                             </View>
                           </GlassCard>
@@ -300,4 +317,10 @@ const styles = StyleSheet.create({
     borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
   },
   lostBadgeText: { color: '#ff8080', fontSize: 11, fontWeight: '700' },
+  tieBadge: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+  },
+  tieBadgeText: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700' },
 });

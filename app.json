@@ -34,8 +34,27 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "extraPods": [
+              { "name": "GoogleUtilities", "modular_headers": true },
+              { "name": "RecaptchaInterop", "modular_headers": true }
+            ]
+          }
+        }
+      ],
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "@react-native-community/datetimepicker",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.291396605020-tst5af47nind6ne3neqibonfjmvja4fq"
+        }
+      ]
     ],
     "extra": {
       "eas": {

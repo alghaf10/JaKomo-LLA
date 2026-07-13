@@ -9,7 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
-import { fetchProfile } from '../lib/profiles';
+import { fetchProfile, findUserByUsername } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
 import GlassCard, { textShadow } from '../components/GlassCard';
 import { useSocialBadge } from '../contexts/SocialBadgeContext';
@@ -18,7 +18,9 @@ import {
   sendFriendRequest, acceptFriendRequest, deleteFriendship, blockUser,
   fetchIncomingRequests, fetchOutgoingRequests, fetchAcceptedFriendships,
 } from '../lib/friends';
-import { checkOpponentEligibility, createChallenge } from '../lib/battles';
+import {
+  checkOpponentEligibility, createChallenge, findExistingBattleWith, isDuplicateBattleError,
+} from '../lib/battles';
 
 export default function FriendsScreen({ navigation, headerContent }) {
   const { refreshPendingRequestCount } = useSocialBadge();
@@ -29,7 +31,9 @@ export default function FriendsScreen({ navigation, headerContent }) {
   const [copied, setCopied] = useState(false);
   const [battlingId, setBattlingId] = useState(null);
 
+  const [usernameInput, setUsernameInput] = useState('');
   const [codeInput, setCodeInput] = useState('');
+  const [showCodeInput, setShowCodeInput] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchResult, setSearchResult] = useState(null);
@@ -105,32 +109,12 @@ export default function FriendsScreen({ navigation, headerContent }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSearch = async () => {
-    const trimmed = codeInput.trim();
-    if (!trimmed) {
-      setSearchError('Enter a friend code.');
-      return;
-    }
-
-    setSearching(true);
-    setSearchError('');
-    setSearchResult(null);
-
-    const { data: found, error } = await lookupProfileByFriendCode(trimmed);
-    if (error) {
-      console.log('Error looking up friend code:', error);
-      setSearching(false);
-      setSearchError('Something went wrong. Please try again.');
-      return;
-    }
-    if (!found) {
-      setSearching(false);
-      setSearchError('No one found with that code.');
-      return;
-    }
+  // Shared tail of both lookup paths (username and JK- code): self-check,
+  // existing-relationship check, then surface the match row.
+  const processFoundProfile = async (found, selfMessage) => {
     if (found.user_id === userId) {
       setSearching(false);
-      setSearchError("That's your own code!");
+      setSearchError(selfMessage);
       return;
     }
 
@@ -157,6 +141,60 @@ export default function FriendsScreen({ navigation, headerContent }) {
     setSearchResult(found);
   };
 
+  const handleUsernameSearch = async () => {
+    const trimmed = usernameInput.trim();
+    if (!trimmed) {
+      setSearchError('Enter a username.');
+      return;
+    }
+
+    setSearching(true);
+    setSearchError('');
+    setSearchResult(null);
+
+    const { data: found, error } = await findUserByUsername(trimmed);
+    if (error) {
+      console.log('Error looking up username:', error);
+      setSearching(false);
+      setSearchError('Something went wrong. Please try again.');
+      return;
+    }
+    // Not found and not-discoverable are deliberately the same message —
+    // the RPC returns nothing for either, so there's no existence leak.
+    if (!found) {
+      setSearching(false);
+      setSearchError('No one found with that username.');
+      return;
+    }
+    await processFoundProfile(found, "That's you!");
+  };
+
+  const handleCodeSearch = async () => {
+    const trimmed = codeInput.trim();
+    if (!trimmed) {
+      setSearchError('Enter a friend code.');
+      return;
+    }
+
+    setSearching(true);
+    setSearchError('');
+    setSearchResult(null);
+
+    const { data: found, error } = await lookupProfileByFriendCode(trimmed);
+    if (error) {
+      console.log('Error looking up friend code:', error);
+      setSearching(false);
+      setSearchError('Something went wrong. Please try again.');
+      return;
+    }
+    if (!found) {
+      setSearching(false);
+      setSearchError('No one found with that code.');
+      return;
+    }
+    await processFoundProfile(found, "That's your own code!");
+  };
+
   const handleSendRequest = async () => {
     if (!searchResult) return;
     setSendingRequest(true);
@@ -170,6 +208,7 @@ export default function FriendsScreen({ navigation, headerContent }) {
       return;
     }
 
+    setUsernameInput('');
     setCodeInput('');
     setSearchResult(null);
     setSearchError('');
@@ -240,7 +279,24 @@ export default function FriendsScreen({ navigation, headerContent }) {
   };
 
   const handleBattle = async (profile) => {
+    const name = profile.first_name || 'this friend';
     setBattlingId(profile.user_id);
+
+    const { data: existing, error: existingError } = await findExistingBattleWith(userId, profile.user_id);
+    if (existingError) console.log('Error checking for existing battle:', existingError);
+    if (existing) {
+      setBattlingId(null);
+      Alert.alert(
+        'Battle in progress',
+        `You already have a battle with ${name}.`,
+        [
+          { text: 'Open Battle', onPress: () => navigation.navigate('Battle', { battleId: existing.id }) },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+
     const { eligible, error: eligError } = await checkOpponentEligibility(profile.user_id, language.code);
     if (eligError) {
       console.log('Error checking battle eligibility:', eligError);
@@ -260,6 +316,12 @@ export default function FriendsScreen({ navigation, headerContent }) {
     setBattlingId(null);
     if (createError) {
       console.log('Error creating challenge:', createError);
+      // Race fallback: the pre-check missed a simultaneous challenge, but
+      // the DB's unique index caught it.
+      if (isDuplicateBattleError(createError)) {
+        Alert.alert('Battle in progress', `You already have a battle with ${name} — check your Battles list.`);
+        return;
+      }
       Alert.alert('Something went wrong', 'Please try again.');
       return;
     }
@@ -300,15 +362,15 @@ export default function FriendsScreen({ navigation, headerContent }) {
               <View style={styles.searchRow}>
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="JK-XXXXX"
+                  placeholder="Username"
                   placeholderTextColor="rgba(255,255,255,0.6)"
-                  value={codeInput}
-                  onChangeText={setCodeInput}
-                  autoCapitalize="characters"
+                  value={usernameInput}
+                  onChangeText={setUsernameInput}
+                  autoCapitalize="none"
                   autoCorrect={false}
                   editable={!searching}
                 />
-                <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={searching}>
+                <TouchableOpacity style={styles.searchBtn} onPress={handleUsernameSearch} disabled={searching}>
                   {searching ? (
                     <ActivityIndicator color="#1a1a1a" />
                   ) : (
@@ -317,12 +379,45 @@ export default function FriendsScreen({ navigation, headerContent }) {
                 </TouchableOpacity>
               </View>
 
+              <TouchableOpacity onPress={() => setShowCodeInput((prev) => !prev)}>
+                <Text style={styles.codeToggleText}>
+                  {showCodeInput ? 'Hide friend code' : 'Have a friend code?'}
+                </Text>
+              </TouchableOpacity>
+
+              {showCodeInput && (
+                <View style={[styles.searchRow, styles.codeSearchRow]}>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="JK-XXXXX"
+                    placeholderTextColor="rgba(255,255,255,0.6)"
+                    value={codeInput}
+                    onChangeText={setCodeInput}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    editable={!searching}
+                  />
+                  <TouchableOpacity style={styles.searchBtn} onPress={handleCodeSearch} disabled={searching}>
+                    {searching ? (
+                      <ActivityIndicator color="#1a1a1a" />
+                    ) : (
+                      <Text style={styles.searchBtnText}>Search</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
 
               {searchResult && (
                 <View style={styles.matchRow}>
                   <Image source={getAvatarSource(searchResult.avatar_id)} style={styles.matchAvatar} />
-                  <Text style={styles.matchName} numberOfLines={1}>{searchResult.first_name}</Text>
+                  <View style={styles.matchInfo}>
+                    <Text style={styles.matchName} numberOfLines={1}>{searchResult.first_name}</Text>
+                    {searchResult.username ? (
+                      <Text style={styles.matchUsername} numberOfLines={1}>@{searchResult.username}</Text>
+                    ) : null}
+                  </View>
                   <TouchableOpacity
                     style={styles.sendBtn}
                     onPress={handleSendRequest}
@@ -506,7 +601,14 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 20, marginRight: 12,
     borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
   },
-  matchName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
+  matchInfo: { flex: 1, marginRight: 8 },
+  matchName: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  matchUsername: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 1 },
+  codeToggleText: {
+    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600',
+    marginTop: 12, marginBottom: 4, textDecorationLine: 'underline',
+  },
+  codeSearchRow: { marginTop: 8 },
   sendBtn: {
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9,
