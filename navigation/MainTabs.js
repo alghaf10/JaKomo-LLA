@@ -11,6 +11,7 @@ import NumbersLessonScreen from '../screens/NumbersLessonScreen';
 import LettersLessonScreen from '../screens/LettersLessonScreen';
 import StreakScreen from '../screens/StreakScreen';
 import LearningPlanScreen from '../screens/LearningPlanScreen';
+import VoiceSpikeScreen from '../screens/VoiceSpikeScreen'; // TODO: remove after Phase 3a spike
 import PracticeScreen from '../screens/PracticeScreen';
 import SocialScreen from '../screens/SocialScreen';
 import GroupDetailScreen from '../screens/GroupDetailScreen';
@@ -61,6 +62,7 @@ function HomeStackScreen() {
       <HomeStack.Screen name="LettersLesson" component={LettersLessonScreen} />
       <HomeStack.Screen name="Streak" component={StreakScreen} />
       <HomeStack.Screen name="LearningPlan" component={LearningPlanScreen} />
+      <HomeStack.Screen name="VoiceSpike" component={VoiceSpikeScreen} />{/* TODO: remove after Phase 3a spike */}
     </HomeStack.Navigator>
   );
 }

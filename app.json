@@ -46,6 +46,16 @@
         }
       ],
       "expo-audio",
+      [
+        "react-native-audio-api",
+        {
+          "iosMicrophonePermission": "JaKomo uses your microphone so you can practice speaking Spanish with the voice tutor.",
+          "androidPermissions": [
+            "android.permission.RECORD_AUDIO",
+            "android.permission.MODIFY_AUDIO_SETTINGS"
+          ]
+        }
+      ],
       "expo-asset",
       "@react-native-community/datetimepicker",
       "expo-apple-authentication",

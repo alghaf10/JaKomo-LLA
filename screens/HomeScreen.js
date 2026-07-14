@@ -1,21 +1,21 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Image, Alert, ActivityIndicator,
-  StyleSheet, ImageBackground, ScrollView,
+  StyleSheet, ScrollView,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage, getLessons, getLessonRouteName } from '../content';
 import { computeStreak } from '../lib/streak';
 import { fetchProfile } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchLearningPlan, generateLearningPlan, shouldOfferRegeneration } from '../lib/learningPlan';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import GradientHeader from '../components/GradientHeader';
+import Card from '../components/Card';
+import { colors, spacing, radius, fontSize, fontWeight } from '../theme';
 
 export default function HomeScreen({ navigation }) {
-  const insets = useSafeAreaInsets();
   const [languageCode, setLanguageCode] = useState('es-MX');
   const [profile, setProfile] = useState(null);
   const [progressByLessonId, setProgressByLessonId] = useState({});
@@ -31,7 +31,6 @@ export default function HomeScreen({ navigation }) {
   const fundamentalsLessons = allLessons.filter(
     (lesson) => lesson.lessonType === 'numbers' || lesson.lessonType === 'letters',
   );
-  const backgrounds = getBackgrounds(language.code);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,274 +102,295 @@ export default function HomeScreen({ navigation }) {
   const nextMilestone = plan?.plan_json?.milestones?.[0] || null;
 
   return (
-    <ImageBackground
-      source={backgrounds.home}
-      style={styles.background}
-    >
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <TouchableOpacity
-            style={[styles.avatarBadge, { top: insets.top + 8 }]}
-            onPress={() => navigation.navigate('ProfileTab')}
-          >
+    <View style={styles.screen}>
+      <GradientHeader
+        title={`¡Hola, ${profile?.first_name || 'amigo'}! ${language.flag}`}
+        subtitle="Ready for today's lesson?"
+        right={(
+          <TouchableOpacity style={styles.avatarBadge} onPress={() => navigation.navigate('ProfileTab')}>
             <Image source={getAvatarSource(profile?.avatar_id)} style={styles.avatarImage} />
           </TouchableOpacity>
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {/* Location pill */}
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>📍 Guanajuato</Text>
-            </View>
+        )}
+      >
+        <View style={styles.locationPill}>
+          <Ionicons name="location-outline" size={14} color={colors.onGradient} />
+          <Text style={styles.locationText}>Guanajuato</Text>
+        </View>
+      </GradientHeader>
 
-            {/* Greeting */}
-            <View style={styles.greetingRow}>
-              <Text style={styles.greeting}>¡Hola, {profile?.first_name || 'amigo'}!</Text>
-              <Text style={styles.greetingFlag}>{language.flag}</Text>
-            </View>
-            <Text style={styles.subGreeting}>Ready for today's lesson?</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Streak */}
+        <TouchableOpacity onPress={() => navigation.navigate('Streak')} activeOpacity={0.8}>
+          <Card style={styles.streakCard}>
+            <Ionicons name="flame" size={20} color={colors.accentCoral} />
+            <Text style={styles.streakText}>{streakDays}</Text>
+            <Text style={styles.streakLabel}>day streak</Text>
+          </Card>
+        </TouchableOpacity>
 
-            {/* Streak pill */}
-            <TouchableOpacity onPress={() => navigation.navigate('Streak')}>
-              <GlassCard style={styles.streakPill}>
-                <Text style={styles.streakPillEmoji}>🔥</Text>
-                <Text style={styles.streakPillText}>{streakDays}</Text>
-              </GlassCard>
+        {/* TODO: remove after Phase 3a spike — temporary dev entry point */}
+        <TouchableOpacity
+          style={styles.devSpikeBtn}
+          onPress={() => navigation.navigate('VoiceSpike')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="mic-outline" size={16} color={colors.accentCoral} />
+          <Text style={styles.devSpikeText}>Voice spike (dev)</Text>
+        </TouchableOpacity>
+
+        {/* Learning plan */}
+        {plan?.plan_json ? (
+          <TouchableOpacity onPress={() => navigation.navigate('LearningPlan')} activeOpacity={0.8}>
+            <Card style={styles.planCard}>
+              <View style={styles.planHeaderRow}>
+                <Text style={styles.planLabel}>Your plan</Text>
+                {planRegenHint && (
+                  <View style={styles.planHintBadge}>
+                    <Text style={styles.planHintText}>Your goals changed — refresh</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.planSummary} numberOfLines={2}>{plan.plan_json.summary}</Text>
+              {nextMilestone && (
+                <Text style={styles.planMilestone} numberOfLines={1}>
+                  Next: Week {nextMilestone.week} · {nextMilestone.title}
+                </Text>
+              )}
+            </Card>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={handleGeneratePlan} disabled={generatingPlan} activeOpacity={0.8}>
+            <Card style={styles.planCard}>
+              {generatingPlan ? (
+                <View style={styles.planGeneratingRow}>
+                  <ActivityIndicator color={colors.accentCoral} />
+                  <Text style={styles.planGeneratingText}>Building your personalized plan…</Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.planLabel}>Your plan</Text>
+                  <Text style={styles.planGenerate}>Generate your personalized learning plan</Text>
+                </>
+              )}
+            </Card>
+          </TouchableOpacity>
+        )}
+
+        {/* Fundamentals */}
+        <View style={styles.fundamentalsSection}>
+          <Text style={styles.sectionTitle}>Fundamentals</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.fundamentalsRow}
+          >
+            <TouchableOpacity onPress={() => navigation.navigate('PracticeTab')} activeOpacity={0.8}>
+              <Card style={styles.tile}>
+                <MaterialCommunityIcons name="cards-outline" size={28} color={colors.accentCoral} />
+                <Text style={styles.tileLabel} numberOfLines={2}>Practice</Text>
+                {dueCount > 0 && (
+                  <View style={styles.tileDueBadge}>
+                    <Text style={styles.tileBadgeText}>{dueCount}</Text>
+                  </View>
+                )}
+              </Card>
             </TouchableOpacity>
 
-            {/* Learning plan */}
-            {plan?.plan_json ? (
-              <TouchableOpacity onPress={() => navigation.navigate('LearningPlan')}>
-                <GlassCard style={styles.planCard}>
-                  <View style={styles.planHeaderRow}>
-                    <Text style={styles.planLabel}>Your plan</Text>
-                    {planRegenHint && (
-                      <View style={styles.planHintBadge}>
-                        <Text style={styles.planHintText}>Your goals changed — refresh</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.planSummary} numberOfLines={2}>{plan.plan_json.summary}</Text>
-                  {nextMilestone && (
-                    <Text style={styles.planMilestone} numberOfLines={1}>
-                      Next: Week {nextMilestone.week} · {nextMilestone.title}
-                    </Text>
-                  )}
-                </GlassCard>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={handleGeneratePlan} disabled={generatingPlan}>
-                <GlassCard style={styles.planCard}>
-                  {generatingPlan ? (
-                    <View style={styles.planGeneratingRow}>
-                      <ActivityIndicator color="#fff" />
-                      <Text style={styles.planGeneratingText}>Building your personalized plan…</Text>
-                    </View>
-                  ) : (
-                    <>
-                      <Text style={styles.planLabel}>Your plan</Text>
-                      <Text style={styles.planSummary}>Generate your personalized learning plan ✨</Text>
-                    </>
-                  )}
-                </GlassCard>
-              </TouchableOpacity>
-            )}
-
-            {/* Fundamentals */}
-            <View style={styles.fundamentalsSection}>
-              <Text style={styles.sectionTitle}>Fundamentals</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.fundamentalsRow}
-              >
-                <TouchableOpacity onPress={() => navigation.navigate('PracticeTab')}>
-                  <GlassCard style={styles.tile}>
-                    <Text style={styles.tileEmoji}>🧠</Text>
-                    <Text style={styles.tileLabel} numberOfLines={2}>Practice</Text>
-                    {dueCount > 0 && (
-                      <View style={styles.tileDueBadge}>
-                        <Text style={styles.tileBadgeText}>{dueCount}</Text>
-                      </View>
-                    )}
-                  </GlassCard>
-                </TouchableOpacity>
-
-                {fundamentalsLessons.map((lesson) => {
-                  const isCompleted = Boolean(progressByLessonId[lesson.id]);
-                  return (
-                    <TouchableOpacity
-                      key={lesson.id}
-                      disabled={!lesson.unlocked}
-                      onPress={() => navigation.navigate(getLessonRouteName(lesson.lessonType), { lesson })}
-                    >
-                      <GlassCard
-                        style={styles.tile}
-                        overlayColor={lesson.unlocked ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'}
-                        borderColor={lesson.unlocked ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)'}
-                      >
-                        <Text style={styles.tileEmoji}>{lesson.emoji}</Text>
-                        <Text
-                          style={[styles.tileLabel, !lesson.unlocked && styles.lessonTitleLocked]}
-                          numberOfLines={2}
-                        >
-                          {lesson.title}
-                        </Text>
-                        {isCompleted && (
-                          <View style={styles.tileCompletedBadge}>
-                            <Text style={styles.tileBadgeText}>✓</Text>
-                          </View>
-                        )}
-                        {!lesson.unlocked && (
-                          <View style={styles.tileLockBadge}>
-                            <Text style={styles.tileBadgeText}>🔒</Text>
-                          </View>
-                        )}
-                      </GlassCard>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {/* Lessons */}
-            <Text style={styles.sectionTitle}>Your Lessons</Text>
-            {lessons.map((lesson) => {
+            {fundamentalsLessons.map((lesson) => {
               const isCompleted = Boolean(progressByLessonId[lesson.id]);
               return (
                 <TouchableOpacity
                   key={lesson.id}
                   disabled={!lesson.unlocked}
                   onPress={() => navigation.navigate(getLessonRouteName(lesson.lessonType), { lesson })}
+                  activeOpacity={0.8}
                 >
-                  <GlassCard
-                    style={styles.lessonCard}
-                    overlayColor={lesson.unlocked ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'}
-                    borderColor={lesson.unlocked ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)'}
-                  >
-                    <Text style={styles.lessonEmoji}>{lesson.emoji}</Text>
-                    <View style={styles.lessonTextContainer}>
-                      <Text style={[styles.lessonTitle, !lesson.unlocked && styles.lessonTitleLocked]}>
-                        {lesson.title}
-                      </Text>
-                      {lesson.subtitle && (
-                        <Text style={styles.lessonSubtitle}>{lesson.subtitle}</Text>
-                      )}
-                    </View>
+                  <Card style={[styles.tile, !lesson.unlocked && styles.tileLocked]}>
+                    {/* lesson.emoji is CONTENT — kept as emoji on purpose. */}
+                    <Text style={styles.tileEmoji}>{lesson.emoji}</Text>
+                    <Text
+                      style={[styles.tileLabel, !lesson.unlocked && styles.textLocked]}
+                      numberOfLines={2}
+                    >
+                      {lesson.title}
+                    </Text>
                     {isCompleted && (
-                      <View style={styles.completedBadge}>
-                        <Text style={styles.completedBadgeText}>✓</Text>
+                      <View style={styles.tileCompletedBadge}>
+                        <Ionicons name="checkmark" size={13} color={colors.onGradient} />
                       </View>
                     )}
-                    {!lesson.unlocked && <Text style={styles.lockIcon}>🔒</Text>}
-                  </GlassCard>
+                    {!lesson.unlocked && (
+                      <View style={styles.tileLockBadge}>
+                        <Ionicons name="lock-closed" size={12} color={colors.onGradient} />
+                      </View>
+                    )}
+                  </Card>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+        </View>
+
+        {/* Lessons */}
+        <Text style={styles.sectionTitle}>Your Lessons</Text>
+        {lessons.map((lesson) => {
+          const isCompleted = Boolean(progressByLessonId[lesson.id]);
+          return (
+            <TouchableOpacity
+              key={lesson.id}
+              disabled={!lesson.unlocked}
+              onPress={() => navigation.navigate(getLessonRouteName(lesson.lessonType), { lesson })}
+              activeOpacity={0.8}
+            >
+              <Card style={[styles.lessonCard, !lesson.unlocked && styles.tileLocked]}>
+                {/* lesson.emoji is CONTENT — kept as emoji on purpose. */}
+                <Text style={styles.lessonEmoji}>{lesson.emoji}</Text>
+                <View style={styles.lessonTextContainer}>
+                  <Text style={[styles.lessonTitle, !lesson.unlocked && styles.textLocked]}>
+                    {lesson.title}
+                  </Text>
+                  {lesson.subtitle && (
+                    <Text style={styles.lessonSubtitle}>{lesson.subtitle}</Text>
+                  )}
+                </View>
+                {isCompleted && (
+                  <View style={styles.completedBadge}>
+                    <Ionicons name="checkmark" size={15} color={colors.onGradient} />
+                  </View>
+                )}
+                {!lesson.unlocked && (
+                  <Ionicons name="lock-closed" size={16} color={colors.textMuted} style={styles.lockIcon} />
+                )}
+              </Card>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
   avatarBadge: {
-    position: 'absolute', left: 20, zIndex: 10,
-    width: 36, height: 36, borderRadius: 18,
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    width: 40, height: 40, borderRadius: 20,
+    borderColor: colors.glassBorder, borderWidth: 0.5,
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  pill: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 20, marginBottom: 22,
-  },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
-  greetingRow: {
-    flexDirection: 'row', alignItems: 'center',
-  },
-  greeting: {
-    fontSize: 30, fontWeight: '800', color: '#fff',
-    letterSpacing: 0.5, ...textShadow,
-  },
-  greetingFlag: { fontSize: 20, marginLeft: 8, ...textShadow },
-  subGreeting: {
-    color: 'rgba(255,255,255,0.9)', fontSize: 15, marginTop: 4, marginBottom: 20, ...textShadow,
-  },
-  streakPill: {
+  locationPill: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
-    paddingHorizontal: 16, paddingVertical: 10, marginBottom: 24,
+    backgroundColor: colors.glassFill,
+    borderColor: colors.glassBorder, borderWidth: 0.5,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2,
+    borderRadius: radius, marginTop: spacing.lg,
   },
-  streakPillEmoji: { fontSize: 18, marginRight: 8 },
-  streakPillText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  locationText: {
+    color: colors.onGradient, fontSize: fontSize.caption,
+    fontWeight: fontWeight.medium, marginLeft: spacing.xs + 2,
+  },
+  streakCard: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+    paddingVertical: spacing.md, marginBottom: spacing.lg,
+  },
+  streakText: {
+    color: colors.text, fontSize: fontSize.header, fontWeight: fontWeight.medium,
+    marginLeft: spacing.sm,
+  },
+  streakLabel: {
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.regular,
+    marginLeft: spacing.sm,
+  },
+  devSpikeBtn: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+    backgroundColor: colors.card,
+    borderColor: colors.border, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  devSpikeText: {
+    color: colors.accentCoral, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
+    marginLeft: spacing.xs + 2,
+  },
   sectionTitle: {
-    color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14, ...textShadow,
+    color: colors.text, fontSize: fontSize.header, fontWeight: fontWeight.medium,
+    marginBottom: spacing.md,
   },
-  fundamentalsSection: { marginBottom: 30 },
-  fundamentalsRow: { flexDirection: 'row', paddingRight: 12 },
+  fundamentalsSection: { marginTop: spacing.sm, marginBottom: spacing.xl },
+  fundamentalsRow: { flexDirection: 'row', paddingRight: spacing.md },
   tile: {
-    width: 100, height: 100, marginRight: 12,
-    alignItems: 'center', justifyContent: 'center', padding: 10,
+    width: 104, height: 104, marginRight: spacing.md,
+    alignItems: 'center', justifyContent: 'center',
   },
-  tileEmoji: { fontSize: 28, marginBottom: 6 },
-  tileLabel: { color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  tileLocked: { opacity: 0.55 },
+  tileEmoji: { fontSize: 28, marginBottom: spacing.xs + 2 },
+  tileLabel: {
+    color: colors.text, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
+    textAlign: 'center', marginTop: spacing.xs + 2,
+  },
+  textLocked: { color: colors.textMuted },
   tileDueBadge: {
-    position: 'absolute', top: 8, right: 8,
+    position: 'absolute', top: spacing.sm, right: spacing.sm,
     minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 4,
-    backgroundColor: 'rgba(255,90,90,0.95)',
+    backgroundColor: colors.accentCoral,
     alignItems: 'center', justifyContent: 'center',
   },
   tileCompletedBadge: {
-    position: 'absolute', top: 8, right: 8,
+    position: 'absolute', top: spacing.sm, right: spacing.sm,
     width: 20, height: 20, borderRadius: 10,
-    backgroundColor: 'rgba(76,217,100,0.9)',
+    backgroundColor: colors.accentPink,
     alignItems: 'center', justifyContent: 'center',
   },
   tileLockBadge: {
-    position: 'absolute', top: 8, right: 8,
+    position: 'absolute', top: spacing.sm, right: spacing.sm,
     width: 20, height: 20, borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.textMuted,
     alignItems: 'center', justifyContent: 'center',
   },
-  tileBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  tileBadgeText: { color: colors.onGradient, fontSize: 11, fontWeight: fontWeight.medium },
   lessonCard: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 16, marginBottom: 14,
+    flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md,
   },
-  lessonEmoji: { fontSize: 26, marginRight: 14 },
+  lessonEmoji: { fontSize: 26, marginRight: spacing.lg },
   lessonTextContainer: { flex: 1 },
-  lessonTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  lessonTitleLocked: { color: 'rgba(255,255,255,0.5)' },
-  lessonSubtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
-  lockIcon: { fontSize: 16, marginLeft: 8 },
+  lessonTitle: { color: colors.text, fontSize: fontSize.body, fontWeight: fontWeight.medium },
+  lessonSubtitle: {
+    color: colors.textMuted, fontSize: fontSize.caption,
+    fontWeight: fontWeight.regular, marginTop: 2,
+  },
+  lockIcon: { marginLeft: spacing.sm },
   completedBadge: {
-    width: 24, height: 24, borderRadius: 12, marginLeft: 8,
-    backgroundColor: 'rgba(76,217,100,0.9)',
+    width: 24, height: 24, borderRadius: 12, marginLeft: spacing.sm,
+    backgroundColor: colors.accentPink,
     alignItems: 'center', justifyContent: 'center',
   },
-  completedBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  planCard: { padding: 18, marginBottom: 24 },
+  planCard: { marginBottom: spacing.xl },
   planHeaderRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: spacing.sm,
   },
   planLabel: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700',
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
   planHintBadge: {
-    backgroundColor: 'rgba(255,196,0,0.2)',
-    borderColor: 'rgba(255,196,0,0.6)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: spacing.sm, paddingVertical: 3,
   },
-  planHintText: { color: '#ffd24a', fontSize: 11, fontWeight: '700' },
-  planSummary: { color: '#fff', fontSize: 15, fontWeight: '600', lineHeight: 21 },
-  planMilestone: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', marginTop: 8 },
-  planGeneratingRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  planGeneratingText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  planHintText: { color: colors.accentCoral, fontSize: 11, fontWeight: fontWeight.medium },
+  planSummary: {
+    color: colors.text, fontSize: fontSize.body, fontWeight: fontWeight.medium, lineHeight: 21,
+  },
+  planGenerate: {
+    color: colors.accentCoral, fontSize: fontSize.body, fontWeight: fontWeight.medium, lineHeight: 21,
+  },
+  planMilestone: {
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.regular,
+    marginTop: spacing.sm,
+  },
+  planGeneratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  planGeneratingText: { color: colors.text, fontSize: fontSize.body, fontWeight: fontWeight.regular },
 });
