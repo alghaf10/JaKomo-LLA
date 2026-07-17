@@ -4,6 +4,7 @@ import {
   StyleSheet, ImageBackground, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
@@ -11,6 +12,15 @@ import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
 import GlassCard, { textShadow } from '../components/GlassCard';
+import { colors } from '../theme';
+
+// Speaker icon + label row for the "Listen again" button.
+const HearLabel = ({ label }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+    <Ionicons name="volume-high" size={16} color={colors.onGradient} style={{ marginRight: 6 }} />
+    <Text style={styles.hearBtnText}>{label}</Text>
+  </View>
+);
 
 const speak = (text, speechLanguage, rate) => {
   Speech.stop();
@@ -152,13 +162,14 @@ export default function LettersLessonScreen({ navigation, route }) {
                 <View style={[styles.progressFill, { width: `${((stepIndex + 1) / steps.length) * 100}%` }]} />
               </View>
               <TouchableOpacity style={styles.closeBtn} onPress={exitToHome}>
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color={colors.onGradient} />
               </TouchableOpacity>
             </View>
           )}
 
           <View style={styles.pill}>
-            <Text style={styles.pillText}>📍 {lesson.location}</Text>
+            <Ionicons name="location-outline" size={13} color={colors.onGradient} />
+            <Text style={styles.pillText}>{lesson.location}</Text>
           </View>
 
           {finished ? (
@@ -185,19 +196,22 @@ export default function LettersLessonScreen({ navigation, route }) {
                       style={styles.speakerBtn}
                       onPress={() => speak(step.name, language.speechLanguage, speechRate)}
                     >
-                      <Text style={styles.speakerBtnText}>🔊</Text>
+                      <Ionicons name="volume-high" size={18} color={colors.onGradient} />
                     </TouchableOpacity>
                   </View>
 
                   <GlassCard style={styles.exampleCard} overlayColor="rgba(0,0,0,0.25)">
-                    <Text style={styles.exampleLabel}>💬 Example word</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="chatbubble-outline" size={15} color={colors.onGradient} style={{ marginRight: 6 }} />
+                      <Text style={styles.exampleLabel}>Example word</Text>
+                    </View>
                     <View style={styles.exampleTextRow}>
                       <Text style={styles.exampleText}>{step.example}</Text>
                       <TouchableOpacity
                         style={styles.speakerBtn}
                         onPress={() => speak(step.example, language.speechLanguage, speechRate)}
                       >
-                        <Text style={styles.speakerBtnText}>🔊</Text>
+                        <Ionicons name="volume-high" size={18} color={colors.onGradient} />
                       </TouchableOpacity>
                     </View>
                     <Text style={styles.exampleTranslation}>{step.exampleTranslation}</Text>
@@ -216,7 +230,7 @@ export default function LettersLessonScreen({ navigation, route }) {
                     style={styles.hearBtn}
                     onPress={() => speak(step.audioText, language.speechLanguage, speechRate)}
                   >
-                    <Text style={styles.hearBtnText}>🔊 Listen again</Text>
+                    <HearLabel label="Listen again" />
                   </TouchableOpacity>
 
                   <View style={styles.glyphGrid}>
@@ -285,12 +299,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
   },
   pill: {
+    flexDirection: 'row', alignItems: 'center',
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: 20, marginTop: 12, marginBottom: 4,
   },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
+  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', marginLeft: 5, ...textShadow },
   progressTrack: {
     flex: 1, height: 8, borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden', marginRight: 16,

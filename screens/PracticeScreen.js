@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
@@ -12,6 +13,7 @@ import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
 import GlassCard, { textShadow } from '../components/GlassCard';
+import { colors } from '../theme';
 
 const speak = (text, speechLanguage, rate) => {
   Speech.stop();
@@ -130,13 +132,14 @@ export default function PracticeScreen({ navigation }) {
                 )}
               </View>
               <TouchableOpacity style={styles.closeBtn} onPress={exitToHome}>
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color={colors.onGradient} />
               </TouchableOpacity>
             </View>
           )}
 
           <View style={styles.pill}>
-            <Text style={styles.pillText}>📍 San Miguel de Allende</Text>
+            <Ionicons name="location-outline" size={13} color={colors.onGradient} />
+            <Text style={styles.pillText}>San Miguel de Allende</Text>
           </View>
 
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -170,7 +173,7 @@ export default function PracticeScreen({ navigation }) {
                         style={styles.speakerBtn}
                         onPress={() => speak(card.phrase, language.speechLanguage, speechRate)}
                       >
-                        <Text style={styles.speakerBtnText}>🔊</Text>
+                        <Ionicons name="volume-high" size={22} color={colors.onGradient} />
                       </TouchableOpacity>
                     </View>
                   )}
@@ -214,12 +217,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
   },
   pill: {
+    flexDirection: 'row', alignItems: 'center',
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: 20, marginTop: 12, marginBottom: 4,
   },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
+  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', marginLeft: 5, ...textShadow },
   progressTrack: {
     flex: 1, height: 8, borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden', marginRight: 16,

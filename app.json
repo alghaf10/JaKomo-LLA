@@ -55,7 +55,7 @@
       [
         "react-native-audio-api",
         {
-          "iosMicrophonePermission": "JaKomo uses your microphone so you can practice speaking Spanish with the voice tutor.",
+          "iosMicrophonePermission": "JaKomo uses your microphone so you can practice speaking Spanish out loud.",
           "androidPermissions": [
             "android.permission.RECORD_AUDIO",
             "android.permission.MODIFY_AUDIO_SETTINGS"
@@ -71,7 +71,22 @@
           "iosUrlScheme": "com.googleusercontent.apps.291396605020-tst5af47nind6ne3neqibonfjmvja4fq"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "JaKomo uses your microphone so you can practice speaking Spanish out loud.",
+          "speechRecognitionPermission": "JaKomo uses speech recognition to check your Spanish pronunciation and give feedback.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#D85A30"
+        }
+      ]
     ],
     "extra": {
       "eas": {

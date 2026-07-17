@@ -28,6 +28,10 @@ export const colors = {
   glassFill: 'rgba(255,255,255,0.20)',
   glassBorder: 'rgba(255,255,255,0.55)',
   onGradient: '#FFFFFF', // text/icons on the gradient
+
+  // Bottom tab bar (still dark/blur until its restyle wave).
+  tabActive: '#FFFFFF',
+  tabInactive: 'rgba(255,255,255,0.55)',
 };
 
 // expo-linear-gradient config matching CSS `linear-gradient(150deg, coral 0%,

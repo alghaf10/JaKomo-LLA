@@ -204,6 +204,63 @@ as intentional spaced practice that deepens mastery, never as filler.
 - Keep summary to one warm, motivating sentence. Keep focus fields concrete and skimmable.
 - Output must be valid JSON only, matching the schema exactly.`;
 
+// Client mirrors this (lib/learningPlan.REGEN_COOLDOWN_MS). Used to backdate a
+// fallback plan's generated_at so the user can immediately retry for a real AI
+// plan rather than being locked out by the regen cooldown.
+const REGEN_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
+// Deterministic lesson ordering for the no-AI fallback plan, keyed by goal.
+// TODO(v3-lessons): revisit this ordering when the 7 new lessons land.
+const DEFAULT_LESSON_ORDER: Record<string, string[]> = {
+  trip: ['es-MX/food-1', 'es-MX/market-1', 'es-MX/transport-1', 'es-MX/numbers-1', 'es-MX/letters-1'],
+  _default: ['es-MX/letters-1', 'es-MX/numbers-1', 'es-MX/food-1', 'es-MX/market-1', 'es-MX/transport-1'],
+};
+
+// Builds a plan purely from onboarding answers — no AI. Returned (and persisted)
+// when Gemini is exhausted so a first-time user never sees a failure state.
+// Shaped identically to a Gemini-generated plan.
+function buildDefaultPlan(profile: any, validIds: string[]): any {
+  const level = profile.level_estimate;
+  const dailyMinutes = profile.daily_minutes;
+  const goal = profile.goal;
+  const weeks = estimateWeeks(level, dailyMinutes);
+
+  const titleById: Record<string, string> = {};
+  (LESSON_REGISTRY[profile.active_language || 'es-MX'] || LESSON_REGISTRY['es-MX'])
+    .forEach((l) => { titleById[l.id] = l.title; });
+
+  // Only real, registered lesson_ids, order preserved.
+  const order = (DEFAULT_LESSON_ORDER[goal] || DEFAULT_LESSON_ORDER._default)
+    .filter((id) => validIds.includes(id));
+
+  const milestones = order.map((id, i) => ({
+    week: i + 1,
+    title: titleById[id] || 'Practice',
+    focus: `Work through the "${titleById[id] || 'lesson'}" lesson and practice it out loud.`,
+    recommended_lessons: [id],
+  }));
+  // Closing spaced-review milestone reusing the first lessons.
+  milestones.push({
+    week: Math.max(weeks, order.length + 1),
+    title: 'Review & reinforce',
+    focus: 'Revisit your earliest lessons as spaced practice — repetition is what makes it stick.',
+    recommended_lessons: order.slice(0, 2),
+  });
+
+  const goalBit = goal === 'trip' ? 'get you ready for your trip'
+    : goal === 'family' ? 'help you connect with family'
+      : goal === 'work' ? 'support you at work'
+        : 'build real, usable Spanish';
+
+  return {
+    summary: `A steady plan to ${goalBit} — about ${weeks} weeks at ${dailyMinutes} minutes a day. ¡Vamos!`,
+    estimated_weeks: weeks,
+    weekly_minutes_target: dailyMinutes * 7,
+    milestones,
+    notes: 'Start at the top and go at your own pace. Revisiting earlier lessons as spaced practice is how it sticks.',
+  };
+}
+
 Deno.serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get('Authorization');
@@ -253,6 +310,7 @@ Deno.serve(async (req: Request) => {
     // backoff inside callGemini — here we resend because the response was
     // MALFORMED, not because Gemini was busy.
     let plan: any = null;
+    let planSource = 'ai';
     try {
       plan = await callGemini(systemPrompt, userPrompt);
       if (!isValidPlan(plan)) {
@@ -260,21 +318,24 @@ Deno.serve(async (req: Request) => {
           `${systemPrompt}\n\nYour previous response did not match the schema. Return ONLY valid JSON matching every required field.`,
           userPrompt,
         );
-        if (!isValidPlan(plan)) {
-          return jsonResponse({ error: "Couldn't generate your plan right now — try again in a moment" }, 502);
-        }
       }
     } catch (genError) {
-      console.log('Gemini generation error:', genError);
-      // Transient demand/throttle exhausted after backoff — tell the user it's
-      // temporary, distinct from the generic failure message.
-      if (genError instanceof GeminiBusyError) {
-        return jsonResponse(
-          { error: "Our AI is in high demand right now — please try again in a few moments." },
-          503,
-        );
+      // Any failure — GeminiBusyError, other 5xx/timeout/network — is handled by
+      // the fallback below, not surfaced. Log for observability.
+      console.log('Gemini generation error (falling back to default plan):', genError);
+      plan = null;
+    }
+
+    // Fall back to a deterministic default plan on ANY Gemini failure or a
+    // still-malformed response after the schema-retry, so a first-time user
+    // NEVER sees a failure state. buildDefaultPlan is validated here too — if it
+    // somehow failed we still serve it rather than convert to a user error.
+    if (!isValidPlan(plan)) {
+      plan = buildDefaultPlan(profile, validIds);
+      planSource = 'fallback';
+      if (!isValidPlan(plan)) {
+        console.log('WARNING: default fallback plan failed validation');
       }
-      return jsonResponse({ error: "Couldn't generate your plan right now — try again in a moment" }, 502);
     }
 
     // Drop any lesson_ids Gemini invented despite instructions.
@@ -289,9 +350,16 @@ Deno.serve(async (req: Request) => {
       goal: profile.goal,
       goal_date: profile.goal_date,
       daily_minutes: profile.daily_minutes,
+      source: planSource, // 'ai' | 'fallback' — lets us count how often fallback fires
     };
 
-    // Upsert only after full validation — never a partial insert.
+    // A fallback plan backdates generated_at past the regen cooldown (+60s) so
+    // the user can immediately retry for a real AI plan; an AI plan uses now.
+    const generatedAt = planSource === 'fallback'
+      ? new Date(Date.now() - (REGEN_COOLDOWN_MS + 60_000)).toISOString()
+      : new Date().toISOString();
+
+    // Upsert only after validation — never a partial insert.
     const { data: saved, error: upsertError } = await supabase
       .from('learning_plans')
       .upsert(
@@ -300,7 +368,7 @@ Deno.serve(async (req: Request) => {
           language,
           plan_json: plan,
           source_snapshot: sourceSnapshot,
-          generated_at: new Date().toISOString(),
+          generated_at: generatedAt,
         },
         { onConflict: 'user_id,language' },
       )

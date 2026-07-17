@@ -138,11 +138,6 @@ export default function LoginScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Location pill */}
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>📍 Chichén Itzá</Text>
-            </View>
-
             {/* Logo */}
             <Text style={styles.logo}>JaKomo</Text>
             <Text style={styles.tagline}>Learn What You Need Fast!- ¡órale!</Text>
@@ -289,13 +284,6 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.3)' },
   dividerText: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', marginHorizontal: 12 },
   scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 24 },
-  pill: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 20, marginBottom: 18,
-  },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
   logo: {
     fontSize: 48, fontWeight: '800', color: '#fff',
     textAlign: 'center', letterSpacing: 1, ...textShadow,

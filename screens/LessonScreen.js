@@ -4,40 +4,47 @@ import {
   StyleSheet, ImageBackground, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Speech from 'expo-speech';
+import { Ionicons } from '@expo/vector-icons';
 import { setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
 import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { textShadow } from '../components/GlassCard';
+import { stopAudio } from '../lib/lessonAudio';
+import { STEP_COMPONENTS, isGradable } from '../components/lessonSteps';
+import { requestPermission, scheduleDailyReminder } from '../lib/notifications';
+import { colors } from '../theme';
 
-const speak = (text, speechLanguage, rate) => {
-  Speech.stop();
-  Speech.speak(text, { language: speechLanguage, rate });
-};
+// Show the daily-reminder offer once, on the first-ever lesson completion.
+const REMINDER_PROMPT_FLAG = 'reminderPromptSeen';
+const REMINDER_HOUR = 19;
 
 export default function LessonScreen({ navigation, route }) {
   const { lesson } = route.params;
   const steps = lesson.steps;
-  const quizCount = steps.filter((s) => s.type === 'quiz').length;
+  // Gradable = anything that yields right/wrong (quiz, listen, fill, build,
+  // speak, match). Score columns stay named quiz_score/quiz_total but now
+  // count all gradable steps.
+  const gradableTotal = steps.filter(isGradable).length;
 
   const [language, setLanguage] = useState(getLanguage());
   const [speechRate, setSpeechRate] = useState(0.85);
   const [stepIndex, setStepIndex] = useState(0);
-  const [selectedIndex, setSelectedIndex] = useState(null);
   const [answered, setAnswered] = useState(false);
-  const [quizResults, setQuizResults] = useState({});
+  const [gradeResults, setGradeResults] = useState({});
   const [finished, setFinished] = useState(false);
+  const [showReminderCard, setShowReminderCard] = useState(false);
 
   const step = steps[stepIndex];
-  const quizScore = Object.values(quizResults).filter(Boolean).length;
+  const gradableScore = Object.values(gradeResults).filter(Boolean).length;
   const backgrounds = getBackgrounds(language.code);
   const backgroundSource = backgrounds.lessons?.[lesson.id] || backgrounds.home;
 
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true });
-    return () => Speech.stop();
+    return () => stopAudio();
   }, []);
 
   useEffect(() => {
@@ -55,7 +62,6 @@ export default function LessonScreen({ navigation, route }) {
   }, []);
 
   useEffect(() => {
-    setSelectedIndex(null);
     setAnswered(false);
   }, [stepIndex]);
 
@@ -72,8 +78,8 @@ export default function LessonScreen({ navigation, route }) {
         {
           user_id: userData.user.id,
           lesson_id: lesson.id,
-          quiz_score: quizScore,
-          quiz_total: quizCount,
+          quiz_score: gradableScore,
+          quiz_total: gradableTotal,
           completed_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,lesson_id' },
@@ -97,23 +103,43 @@ export default function LessonScreen({ navigation, route }) {
     saveProgress();
   }, [finished]);
 
+  // Offer the daily reminder once, on the first-ever completion.
+  useEffect(() => {
+    if (!finished) return;
+    AsyncStorage.getItem(REMINDER_PROMPT_FLAG).then((seen) => {
+      if (!seen) setShowReminderCard(true);
+    });
+  }, [finished]);
+
+  const dismissReminder = async () => {
+    setShowReminderCard(false);
+    await AsyncStorage.setItem(REMINDER_PROMPT_FLAG, '1');
+  };
+
+  const acceptReminder = async () => {
+    setShowReminderCard(false);
+    await AsyncStorage.setItem(REMINDER_PROMPT_FLAG, '1');
+    const granted = await requestPermission();
+    if (granted) await scheduleDailyReminder(REMINDER_HOUR);
+  };
+
   const exitToHome = () => {
-    Speech.stop();
+    stopAudio();
     navigation.popToTop();
   };
 
-  const handleAnswer = (index) => {
-    if (answered) return;
-    setSelectedIndex(index);
+  // Called by a gradable step component when the learner commits an answer.
+  // Records the first result only (revisits don't overwrite the score) and
+  // unlocks Continue for the current step.
+  const handleResolve = (isCorrect) => {
     setAnswered(true);
-    const isCorrect = index === step.correctIndex;
-    setQuizResults((prev) => (
-      prev[stepIndex] !== undefined ? prev : { ...prev, [stepIndex]: isCorrect }
+    setGradeResults((prev) => (
+      prev[stepIndex] !== undefined ? prev : { ...prev, [stepIndex]: !!isCorrect }
     ));
   };
 
   const handleContinue = () => {
-    Speech.stop();
+    stopAudio();
     if (stepIndex === steps.length - 1) {
       setFinished(true);
       return;
@@ -122,11 +148,12 @@ export default function LessonScreen({ navigation, route }) {
   };
 
   const handleBack = () => {
-    Speech.stop();
+    stopAudio();
     setStepIndex((prev) => Math.max(prev - 1, 0));
   };
 
-  const canContinue = step?.type === 'teach' || step?.type === 'word' || answered;
+  const canContinue = !isGradable(step) || answered;
+  const StepComponent = step ? STEP_COMPONENTS[step.type] : null;
 
   return (
     <ImageBackground
@@ -148,13 +175,14 @@ export default function LessonScreen({ navigation, route }) {
                 <View style={[styles.progressFill, { width: `${((stepIndex + 1) / steps.length) * 100}%` }]} />
               </View>
               <TouchableOpacity style={styles.closeBtn} onPress={exitToHome}>
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color={colors.onGradient} />
               </TouchableOpacity>
             </View>
           )}
 
           <View style={styles.pill}>
-            <Text style={styles.pillText}>📍 {lesson.location}</Text>
+            <Ionicons name="location-outline" size={13} color={colors.onGradient} />
+            <Text style={styles.pillText}>{lesson.location}</Text>
           </View>
 
           {finished ? (
@@ -162,95 +190,41 @@ export default function LessonScreen({ navigation, route }) {
               <Text style={styles.completeEmoji}>🎉</Text>
               <Text style={styles.completeTitle}>Lesson complete!</Text>
               <Text style={styles.completeSubtitle}>
-                You got {quizScore} out of {quizCount} right on the first try
+                You got {gradableScore} out of {gradableTotal} right on the first try
               </Text>
+
+              {showReminderCard && (
+                <View style={styles.reminderCard}>
+                  <Text style={styles.reminderTitle}>Keep the streak going?</Text>
+                  <Text style={styles.reminderBody}>
+                    We can send a friendly daily nudge so your five minutes of Spanish never slip.
+                  </Text>
+                  <TouchableOpacity style={styles.reminderAccept} onPress={acceptReminder}>
+                    <Text style={styles.reminderAcceptText}>Remind me daily</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.reminderDecline} onPress={dismissReminder}>
+                    <Text style={styles.reminderDeclineText}>Not now</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <TouchableOpacity style={styles.primaryBtn} onPress={exitToHome}>
                 <Text style={styles.primaryBtnText}>Back to Home</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-              {step.type === 'word' ? (
-                <>
-                  <Text style={styles.wordPhrase}>{step.phrase}</Text>
-                  <Text style={styles.translation}>{step.translation}</Text>
-                  <TouchableOpacity
-                    style={styles.hearBtn}
-                    onPress={() => speak(step.phrase, language.speechLanguage, speechRate)}
-                  >
-                    <Text style={styles.hearBtnText}>🔊 Hear it</Text>
-                  </TouchableOpacity>
-                  {step.note && (
-                    <GlassCard style={styles.noteCard} overlayColor="rgba(0,0,0,0.25)">
-                      <Text style={styles.noteText}>{step.note}</Text>
-                    </GlassCard>
-                  )}
-                </>
-              ) : step.type === 'teach' ? (
-                <>
-                  <Text style={styles.phrase}>{step.phrase}</Text>
-                  <Text style={styles.translation}>{step.translation}</Text>
-                  <TouchableOpacity
-                    style={styles.hearBtn}
-                    onPress={() => speak(step.phrase, language.speechLanguage, speechRate)}
-                  >
-                    <Text style={styles.hearBtnText}>🔊 Hear it</Text>
-                  </TouchableOpacity>
-                  <GlassCard style={styles.cultureCard} overlayColor="rgba(0,0,0,0.25)">
-                    <Text style={styles.cultureLabel}>💡 Culture tip</Text>
-                    <Text style={styles.cultureText}>{step.culture}</Text>
-                  </GlassCard>
-                </>
+              {StepComponent ? (
+                <StepComponent
+                  // Remount on step change so each step's local state resets.
+                  key={step.id || stepIndex}
+                  step={step}
+                  language={language}
+                  speechRate={speechRate}
+                  onResolve={handleResolve}
+                />
               ) : (
-                <>
-                  <Text style={styles.question}>{step.question}</Text>
-                  {step.options.map((option, index) => {
-                    const isCorrect = index === step.correctIndex;
-                    const isSelected = index === selectedIndex;
-                    let overlayColor = 'rgba(255,255,255,0.12)';
-                    let optionBorderColor = 'rgba(255,255,255,0.3)';
-                    if (answered && isCorrect) {
-                      overlayColor = 'rgba(76,217,100,0.35)';
-                      optionBorderColor = 'rgba(76,217,100,0.8)';
-                    } else if (answered && isSelected) {
-                      overlayColor = 'rgba(255,59,48,0.35)';
-                      optionBorderColor = 'rgba(255,59,48,0.8)';
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        key={option}
-                        onPress={() => handleAnswer(index)}
-                        disabled={answered}
-                      >
-                        <GlassCard
-                          style={styles.option}
-                          overlayColor={overlayColor}
-                          borderColor={optionBorderColor}
-                        >
-                          <View style={styles.optionRow}>
-                            <Text style={styles.optionText}>{option}</Text>
-                            {answered && isCorrect && (
-                              <TouchableOpacity
-                                style={styles.speakerBtn}
-                                onPress={() => speak(option, language.speechLanguage, speechRate)}
-                              >
-                                <Text style={styles.speakerBtnText}>🔊</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </GlassCard>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {answered && (
-                    <GlassCard style={styles.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
-                      <Text style={styles.feedbackText}>
-                        {selectedIndex === step.correctIndex ? step.feedbackCorrect : step.feedbackWrong}
-                      </Text>
-                    </GlassCard>
-                  )}
-                </>
+                <Text style={styles.question}>Unsupported step type: {step.type}</Text>
               )}
 
               {canContinue && (
@@ -275,12 +249,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
   },
   pill: {
+    flexDirection: 'row', alignItems: 'center',
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: 20, marginTop: 12, marginBottom: 4,
   },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', ...textShadow },
+  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', marginLeft: 5, ...textShadow },
   progressTrack: {
     flex: 1, height: 8, borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden', marginRight: 16,
@@ -358,4 +333,22 @@ const styles = StyleSheet.create({
   completeSubtitle: {
     fontSize: 15, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 32,
   },
+  reminderCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.3)', borderWidth: 1,
+    borderRadius: 14, padding: 18, marginBottom: 24,
+  },
+  reminderTitle: { color: '#fff', fontSize: 17, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
+  reminderBody: {
+    color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20,
+    textAlign: 'center', marginBottom: 16,
+  },
+  reminderAccept: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12, padding: 14, alignItems: 'center',
+  },
+  reminderAcceptText: { color: '#1a1a1a', fontWeight: '700', fontSize: 15 },
+  reminderDecline: { padding: 12, alignItems: 'center', marginTop: 4 },
+  reminderDeclineText: { color: 'rgba(255,255,255,0.75)', fontWeight: '600', fontSize: 14 },
 });

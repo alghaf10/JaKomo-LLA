@@ -1,9 +1,10 @@
 import React from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from '../screens/HomeScreen';
 import LessonScreen from '../screens/LessonScreen';
@@ -19,6 +20,7 @@ import GroupChatScreen from '../screens/GroupChatScreen';
 import BattleScreen from '../screens/BattleScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { SocialBadgeProvider, useSocialBadge } from '../contexts/SocialBadgeContext';
+import { colors } from '../theme';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -28,11 +30,12 @@ const SocialStack = createNativeStackNavigator();
 const HOME_HIDDEN_ROUTES = ['Lesson', 'NumbersLesson', 'LettersLesson'];
 const SOCIAL_HIDDEN_ROUTES = ['GroupChat', 'Battle'];
 
+// Ionicons names per tab: [outline (inactive), filled (focused)].
 const TAB_ICONS = {
-  HomeTab: '🏠',
-  PracticeTab: '🧠',
-  SocialTab: '👥',
-  ProfileTab: '👤',
+  HomeTab: ['home-outline', 'home'],
+  PracticeTab: ['school-outline', 'school'],
+  SocialTab: ['people-outline', 'people'],
+  ProfileTab: ['person-outline', 'person'],
 };
 
 const VISIBLE_TAB_BAR_STYLE = {
@@ -85,15 +88,16 @@ function MainTabsNavigator() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#fff',
-        tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
+        tabBarActiveTintColor: colors.tabActive,
+        tabBarInactiveTintColor: colors.tabInactive,
         tabBarStyle: VISIBLE_TAB_BAR_STYLE,
         tabBarBackground,
-        tabBarIcon: ({ focused }) => (
-          <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.55 }}>
-            {TAB_ICONS[route.name]}
-          </Text>
-        ),
+        tabBarIcon: ({ focused, color }) => {
+          const [outline, filled] = TAB_ICONS[route.name];
+          return (
+            <Ionicons name={focused ? filled : outline} size={24} color={color} />
+          );
+        },
       })}
     >
       <Tab.Screen

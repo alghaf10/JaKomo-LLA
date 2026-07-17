@@ -40,10 +40,16 @@ async function mintEphemeralToken(): Promise<string> {
 
   // Ephemeral tokens are v1alpha-only. Body fields are top-level on the
   // AuthToken resource (the SDK's `config` wrapper is an SDK-ism, not REST).
-  // - uses: 1               -> single Live session per token
-  // - expireTime            -> token unusable to START a session after this
-  // - newSessionExpireTime  -> must OPEN the socket within this short window
-  // - liveConnectConstraints-> lock model + AUDIO modality server-side
+  // - uses: 1                    -> single Live session per token
+  // - expireTime                 -> token unusable to START a session after this
+  // - newSessionExpireTime       -> must OPEN the socket within this short window
+  // - bidiGenerateContentSetup   -> locks the session config server-side. NOTE:
+  //   the raw REST field is `bidiGenerateContentSetup` (a BidiGenerateContentSetup,
+  //   same shape as the client's `setup` message), NOT the SDK-only
+  //   `liveConnectConstraints` — that name 400s with "Unknown name" against REST.
+  //   Present-and-non-empty here means these fields are LOCKED: a leaked token
+  //   can only open an AUDIO session on this one model. `model` takes the
+  //   `models/` prefix to match what the client sends in its setup.
   const now = Date.now();
   const url = 'https://generativelanguage.googleapis.com/v1alpha/auth_tokens';
   const requestInit = {
@@ -53,9 +59,9 @@ async function mintEphemeralToken(): Promise<string> {
       uses: 1,
       expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
       newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
-      liveConnectConstraints: {
-        model: GEMINI_LIVE_MODEL,
-        config: { responseModalities: ['AUDIO'] },
+      bidiGenerateContentSetup: {
+        model: `models/${GEMINI_LIVE_MODEL}`,
+        generationConfig: { responseModalities: ['AUDIO'] },
       },
     }),
   };
