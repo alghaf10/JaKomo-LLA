@@ -73,14 +73,6 @@
       ],
       "expo-font",
       [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "JaKomo uses your microphone so you can practice speaking Spanish out loud.",
-          "speechRecognitionPermission": "JaKomo uses speech recognition to check your Spanish pronunciation and give feedback.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
-        }
-      ],
-      [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
