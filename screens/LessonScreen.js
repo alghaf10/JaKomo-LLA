@@ -1,29 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  StyleSheet, ImageBackground, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { setAudioModeAsync } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { textShadow } from '../components/GlassCard';
 import { stopAudio } from '../lib/lessonAudio';
+import { isSpeechRecognitionAvailable } from '../lib/speechRecognition';
 import { STEP_COMPONENTS, isGradable } from '../components/lessonSteps';
 import { requestPermission, scheduleDailyReminder } from '../lib/notifications';
-import { colors } from '../theme';
+import Card from '../components/Card';
+import SolidButton from '../components/SolidButton';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 // Show the daily-reminder offer once, on the first-ever lesson completion.
 const REMINDER_PROMPT_FLAG = 'reminderPromptSeen';
 const REMINDER_HOUR = 19;
 
 export default function LessonScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { lesson } = route.params;
-  const steps = lesson.steps;
+  // Hide 'speak' steps in production when speech recognition is unavailable, so
+  // learners aren't shown an exercise they can't complete. They're removed from
+  // the flow AND from the gradable totals. In __DEV__ the simulate-field
+  // fallback keeps them testable, so keep them.
+  // TODO(stt-1.1): un-hide when the speech-recognition module returns.
+  const steps = (!__DEV__ && !isSpeechRecognitionAvailable())
+    ? lesson.steps.filter((s) => s.type !== 'speak')
+    : lesson.steps;
   // Gradable = anything that yields right/wrong (quiz, listen, fill, build,
   // speak, match). Score columns stay named quiz_score/quiz_total but now
   // count all gradable steps.
@@ -39,8 +50,6 @@ export default function LessonScreen({ navigation, route }) {
 
   const step = steps[stepIndex];
   const gradableScore = Object.values(gradeResults).filter(Boolean).length;
-  const backgrounds = getBackgrounds(language.code);
-  const backgroundSource = backgrounds.lessons?.[lesson.id] || backgrounds.home;
 
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true });
@@ -156,199 +165,127 @@ export default function LessonScreen({ navigation, route }) {
   const StepComponent = step ? STEP_COMPONENTS[step.type] : null;
 
   return (
-    <ImageBackground
-      source={backgroundSource}
-      style={styles.background}
-    >
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          {!finished && (
-            <View style={styles.header}>
-              {stepIndex > 0 ? (
-                <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
-                  <Text style={styles.backBtnText}>←</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.backBtnSpacer} />
-              )}
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${((stepIndex + 1) / steps.length) * 100}%` }]} />
-              </View>
-              <TouchableOpacity style={styles.closeBtn} onPress={exitToHome}>
-                <Ionicons name="close" size={18} color={colors.onGradient} />
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        {finished ? (
+          <Text style={styles.headerTitle}>Lesson complete</Text>
+        ) : (
+          <View style={styles.headerRow}>
+            {stepIndex > 0 ? (
+              <TouchableOpacity style={styles.glassBtn} onPress={handleBack}>
+                <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
               </TouchableOpacity>
+            ) : (
+              <View style={styles.glassBtnSpacer} />
+            )}
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${((stepIndex + 1) / steps.length) * 100}%` }]} />
             </View>
-          )}
-
-          <View style={styles.pill}>
-            <Ionicons name="location-outline" size={13} color={colors.onGradient} />
-            <Text style={styles.pillText}>{lesson.location}</Text>
+            <TouchableOpacity style={styles.glassBtn} onPress={exitToHome}>
+              <Ionicons name="close" size={18} color={colors.onGradient} />
+            </TouchableOpacity>
           </View>
+        )}
+      </LinearGradient>
 
-          {finished ? (
-            <View style={styles.completeContainer}>
-              <Text style={styles.completeEmoji}>🎉</Text>
-              <Text style={styles.completeTitle}>Lesson complete!</Text>
-              <Text style={styles.completeSubtitle}>
-                You got {gradableScore} out of {gradableTotal} right on the first try
+      {finished ? (
+        <View style={styles.completeContainer}>
+          <Text style={styles.completeEmoji}>🎉</Text>
+          <Text style={styles.completeTitle}>¡Bien hecho!</Text>
+          <Text style={styles.completeSubtitle}>
+            You got {gradableScore} out of {gradableTotal} right on the first try
+          </Text>
+
+          {showReminderCard && (
+            <Card style={styles.reminderCard}>
+              <Text style={styles.reminderTitle}>Keep the streak going?</Text>
+              <Text style={styles.reminderBody}>
+                We can send a friendly daily nudge so your five minutes of Spanish never slip.
               </Text>
-
-              {showReminderCard && (
-                <View style={styles.reminderCard}>
-                  <Text style={styles.reminderTitle}>Keep the streak going?</Text>
-                  <Text style={styles.reminderBody}>
-                    We can send a friendly daily nudge so your five minutes of Spanish never slip.
-                  </Text>
-                  <TouchableOpacity style={styles.reminderAccept} onPress={acceptReminder}>
-                    <Text style={styles.reminderAcceptText}>Remind me daily</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.reminderDecline} onPress={dismissReminder}>
-                    <Text style={styles.reminderDeclineText}>Not now</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              <TouchableOpacity style={styles.primaryBtn} onPress={exitToHome}>
-                <Text style={styles.primaryBtnText}>Back to Home</Text>
+              <SolidButton label="Remind me daily" onPress={acceptReminder} />
+              <TouchableOpacity style={styles.reminderDecline} onPress={dismissReminder}>
+                <Text style={styles.reminderDeclineText}>Not now</Text>
               </TouchableOpacity>
-            </View>
-          ) : (
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-              {StepComponent ? (
-                <StepComponent
-                  // Remount on step change so each step's local state resets.
-                  key={step.id || stepIndex}
-                  step={step}
-                  language={language}
-                  speechRate={speechRate}
-                  onResolve={handleResolve}
-                />
-              ) : (
-                <Text style={styles.question}>Unsupported step type: {step.type}</Text>
-              )}
-
-              {canContinue && (
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleContinue}>
-                  <Text style={styles.primaryBtnText}>Continue</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
+            </Card>
           )}
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+
+          <SolidButton label="Back to Home" onPress={exitToHome} style={styles.homeBtn} />
+        </View>
+      ) : (
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          {StepComponent ? (
+            <StepComponent
+              // Remount on step change so each step's local state resets.
+              key={step.id || stepIndex}
+              step={step}
+              language={language}
+              speechRate={speechRate}
+              onResolve={handleResolve}
+            />
+          ) : (
+            <Text style={styles.fallback}>Unsupported step type: {step.type}</Text>
+          )}
+
+          {canContinue && (
+            <SolidButton label="Continue" onPress={handleContinue} style={styles.continueBtn} />
+          )}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2,
+    borderBottomRightRadius: radius * 2,
   },
-  pill: {
-    flexDirection: 'row', alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 20, marginTop: 12, marginBottom: 4,
+  headerTitle: {
+    color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium,
   },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', marginLeft: 5, ...textShadow },
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
+  glassBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.glassFill,
+    borderColor: colors.glassBorder, borderWidth: 0.5,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  glassBtnSpacer: { width: 32 },
   progressTrack: {
     flex: 1, height: 8, borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden', marginRight: 16,
+    backgroundColor: 'rgba(255,255,255,0.3)', overflow: 'hidden',
+    marginHorizontal: spacing.lg,
   },
-  progressFill: {
-    height: '100%', backgroundColor: '#fff', borderRadius: 4,
-  },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  backBtn: {
-    width: 32, height: 32, borderRadius: 16, marginRight: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  backBtnSpacer: { width: 32, marginRight: 16 },
+  progressFill: { height: '100%', backgroundColor: colors.onGradient, borderRadius: 4 },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, flexGrow: 1 },
-  phrase: {
-    fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 10, ...textShadow,
-  },
-  wordPhrase: {
-    fontSize: 44, fontWeight: '800', color: '#fff', marginBottom: 10, ...textShadow,
-  },
-  translation: {
-    fontSize: 16, color: 'rgba(255,255,255,0.9)', marginBottom: 20,
-  },
-  hearBtn: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
-    marginBottom: 24,
-  },
-  hearBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  cultureCard: {
-    padding: 16,
-  },
-  cultureLabel: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
-  cultureText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, lineHeight: 20 },
-  noteCard: {
-    padding: 12,
-  },
-  noteText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, lineHeight: 18 },
-  question: {
-    fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 22,
-  },
-  option: {
-    padding: 16, marginBottom: 12,
-  },
-  optionRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  optionText: { color: '#fff', fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  speakerBtn: { marginLeft: 12, padding: 4 },
-  speakerBtnText: { fontSize: 18 },
-  feedbackCard: {
-    padding: 16, marginTop: 8,
-  },
-  feedbackText: { color: '#fff', fontSize: 14, lineHeight: 20 },
-  primaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 28,
-  },
-  primaryBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 16 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl, flexGrow: 1 },
+  fallback: { fontSize: 20, fontWeight: fontWeight.medium, color: colors.text, marginBottom: 22 },
+  continueBtn: { marginTop: spacing.xl },
   completeContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32,
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl,
   },
-  completeEmoji: { fontSize: 64, marginBottom: 16 },
-  completeTitle: { fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 10 },
+  completeEmoji: { fontSize: 64, marginBottom: spacing.lg },
+  completeTitle: { fontSize: 26, fontWeight: fontWeight.medium, color: colors.text, marginBottom: 10 },
   completeSubtitle: {
-    fontSize: 15, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 32,
+    fontSize: 15, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.xxl,
   },
-  reminderCard: {
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderColor: 'rgba(255,255,255,0.3)', borderWidth: 1,
-    borderRadius: 14, padding: 18, marginBottom: 24,
+  reminderCard: { width: '100%', marginBottom: spacing.xl },
+  reminderTitle: {
+    color: colors.text, fontSize: 17, fontWeight: fontWeight.medium, marginBottom: 6, textAlign: 'center',
   },
-  reminderTitle: { color: '#fff', fontSize: 17, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
   reminderBody: {
-    color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20,
-    textAlign: 'center', marginBottom: 16,
+    color: colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: spacing.lg,
   },
-  reminderAccept: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 12, padding: 14, alignItems: 'center',
-  },
-  reminderAcceptText: { color: '#1a1a1a', fontWeight: '700', fontSize: 15 },
-  reminderDecline: { padding: 12, alignItems: 'center', marginTop: 4 },
-  reminderDeclineText: { color: 'rgba(255,255,255,0.75)', fontWeight: '600', fontSize: 14 },
+  reminderDecline: { padding: spacing.md, alignItems: 'center', marginTop: spacing.xs },
+  reminderDeclineText: { color: colors.textMuted, fontWeight: fontWeight.medium, fontSize: 14 },
+  homeBtn: { alignSelf: 'stretch' },
 });

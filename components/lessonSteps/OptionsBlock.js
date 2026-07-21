@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import GlassCard from '../GlassCard';
 import { playText } from '../../lib/lessonAudio';
 import { colors } from '../../theme';
 import {
@@ -32,7 +31,7 @@ export default function OptionsBlock({ step, language, speechRate, onResolve }) 
 
         return (
           <TouchableOpacity key={option} onPress={() => handleAnswer(index)} disabled={answered}>
-            <GlassCard style={s.option} overlayColor={tint.overlay} borderColor={tint.border}>
+            <View style={[s.card, s.option, { backgroundColor: tint.overlay, borderColor: tint.border }]}>
               <View style={s.optionRow}>
                 <Text style={s.optionText}>{option}</Text>
                 {answered && isCorrect && (
@@ -40,20 +39,20 @@ export default function OptionsBlock({ step, language, speechRate, onResolve }) 
                     style={s.speakerBtn}
                     onPress={() => playText(option, { language: language.speechLanguage, rate: speechRate })}
                   >
-                    <Ionicons name="volume-high" size={18} color={colors.onGradient} />
+                    <Ionicons name="volume-high" size={18} color={colors.accentCoral} />
                   </TouchableOpacity>
                 )}
               </View>
-            </GlassCard>
+            </View>
           </TouchableOpacity>
         );
       })}
       {answered && (
-        <GlassCard style={s.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
+        <View style={[s.card, s.feedbackCard]}>
           <Text style={s.feedbackText}>
             {selectedIndex === step.correctIndex ? step.feedbackCorrect : step.feedbackWrong}
           </Text>
-        </GlassCard>
+        </View>
       )}
     </>
   );

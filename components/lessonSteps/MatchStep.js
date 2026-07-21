@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import GlassCard from '../GlassCard';
 import { playText } from '../../lib/lessonAudio';
 import { stepStyles as s } from './common';
 
@@ -81,11 +80,11 @@ export default function MatchStep({ step, language, speechRate, onResolve }) {
         </View>
       </View>
       {allDone ? (
-        <GlassCard style={s.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
+        <View style={[s.card, s.feedbackCard]}>
           <Text style={s.feedbackText}>
             {mistakes === 0 ? '¡Todo correcto!' : `Matched — with ${mistakes} slip${mistakes === 1 ? '' : 's'}.`}
           </Text>
-        </GlassCard>
+        </View>
       ) : null}
     </>
   );

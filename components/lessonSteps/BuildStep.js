@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import GlassCard from '../GlassCard';
 import { normalize } from '../../lib/answerCheck';
 import { stepStyles as s } from './common';
 
@@ -70,13 +69,13 @@ export default function BuildStep({ step, onResolve }) {
       </View>
 
       {answered ? (
-        <GlassCard style={s.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
+        <View style={[s.card, s.feedbackCard]}>
           <Text style={s.feedbackText}>
             {correct
               ? (step.feedbackCorrect || '¡Bien hecho!')
               : (step.feedbackWrong || `Not quite — "${step.answer}".`)}
           </Text>
-        </GlassCard>
+        </View>
       ) : (
         <TouchableOpacity
           style={[s.checkBtn, selected.length === 0 && s.checkBtnDisabled]}

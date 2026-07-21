@@ -1,23 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  StyleSheet, ImageBackground, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
-import GlassCard, { textShadow } from '../components/GlassCard';
-import { colors } from '../theme';
+import Card from '../components/Card';
+import SolidButton from '../components/SolidButton';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
-// Speaker icon + label row for the "Listen again" button.
 const HearLabel = ({ label }) => (
   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-    <Ionicons name="volume-high" size={16} color={colors.onGradient} style={{ marginRight: 6 }} />
+    <Ionicons name="volume-high" size={16} color={colors.accentCoral} style={{ marginRight: 6 }} />
     <Text style={styles.hearBtnText}>{label}</Text>
   </View>
 );
@@ -27,7 +28,14 @@ const speak = (text, speechLanguage, rate) => {
   Speech.speak(text, { language: speechLanguage, rate });
 };
 
+const optionTint = (answered, isCorrect, isSelected) => {
+  if (answered && isCorrect) return { bg: colors.successTint, border: colors.success };
+  if (answered && isSelected) return { bg: colors.dangerTint, border: colors.danger };
+  return { bg: colors.card, border: colors.border };
+};
+
 export default function LettersLessonScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { lesson } = route.params;
   const steps = lesson.steps;
   const quizCount = steps.filter((s) => s.type === 'quiz').length;
@@ -42,8 +50,6 @@ export default function LettersLessonScreen({ navigation, route }) {
 
   const step = steps[stepIndex];
   const quizScore = Object.values(quizResults).filter(Boolean).length;
-  const backgrounds = getBackgrounds(language.code);
-  const backgroundSource = backgrounds.lessons?.[lesson.id] || backgrounds.home;
 
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true });
@@ -146,247 +152,191 @@ export default function LettersLessonScreen({ navigation, route }) {
   const canContinue = step?.type === 'teach' || answered;
 
   return (
-    <ImageBackground source={backgroundSource} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          {!finished && (
-            <View style={styles.header}>
-              {stepIndex > 0 ? (
-                <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
-                  <Text style={styles.backBtnText}>←</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.backBtnSpacer} />
-              )}
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${((stepIndex + 1) / steps.length) * 100}%` }]} />
-              </View>
-              <TouchableOpacity style={styles.closeBtn} onPress={exitToHome}>
-                <Ionicons name="close" size={18} color={colors.onGradient} />
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        {finished ? (
+          <Text style={styles.headerTitle}>Lesson complete</Text>
+        ) : (
+          <View style={styles.headerRow}>
+            {stepIndex > 0 ? (
+              <TouchableOpacity style={styles.glassBtn} onPress={handleBack}>
+                <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
               </TouchableOpacity>
+            ) : (
+              <View style={styles.glassBtnSpacer} />
+            )}
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${((stepIndex + 1) / steps.length) * 100}%` }]} />
             </View>
-          )}
-
-          <View style={styles.pill}>
-            <Ionicons name="location-outline" size={13} color={colors.onGradient} />
-            <Text style={styles.pillText}>{lesson.location}</Text>
+            <TouchableOpacity style={styles.glassBtn} onPress={exitToHome}>
+              <Ionicons name="close" size={18} color={colors.onGradient} />
+            </TouchableOpacity>
           </View>
+        )}
+      </LinearGradient>
 
-          {finished ? (
-            <View style={styles.completeContainer}>
-              <Text style={styles.completeEmoji}>🎉</Text>
-              <Text style={styles.completeTitle}>Lesson complete!</Text>
-              <Text style={styles.completeSubtitle}>
-                You got {quizScore} out of {quizCount} right on the first try
+      {finished ? (
+        <View style={styles.completeContainer}>
+          <Text style={styles.completeEmoji}>🎉</Text>
+          <Text style={styles.completeTitle}>¡Bien hecho!</Text>
+          <Text style={styles.completeSubtitle}>
+            You got {quizScore} out of {quizCount} right on the first try
+          </Text>
+          <SolidButton label="Back to Home" onPress={exitToHome} style={styles.homeBtn} />
+        </View>
+      ) : (
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          {step.type === 'teach' ? (
+            <>
+              <Text style={styles.glyphDisplay} adjustsFontSizeToFit numberOfLines={1}>
+                {step.glyph}
               </Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={exitToHome}>
-                <Text style={styles.primaryBtnText}>Back to Home</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-              {step.type === 'teach' ? (
-                <>
-                  <Text style={styles.glyphDisplay} adjustsFontSizeToFit numberOfLines={1}>
-                    {step.glyph}
-                  </Text>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.nameText}>{step.name}</Text>
-                    <TouchableOpacity
-                      style={styles.speakerBtn}
-                      onPress={() => speak(step.name, language.speechLanguage, speechRate)}
-                    >
-                      <Ionicons name="volume-high" size={18} color={colors.onGradient} />
-                    </TouchableOpacity>
-                  </View>
-
-                  <GlassCard style={styles.exampleCard} overlayColor="rgba(0,0,0,0.25)">
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="chatbubble-outline" size={15} color={colors.onGradient} style={{ marginRight: 6 }} />
-                      <Text style={styles.exampleLabel}>Example word</Text>
-                    </View>
-                    <View style={styles.exampleTextRow}>
-                      <Text style={styles.exampleText}>{step.example}</Text>
-                      <TouchableOpacity
-                        style={styles.speakerBtn}
-                        onPress={() => speak(step.example, language.speechLanguage, speechRate)}
-                      >
-                        <Ionicons name="volume-high" size={18} color={colors.onGradient} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.exampleTranslation}>{step.exampleTranslation}</Text>
-                  </GlassCard>
-
-                  {step.note && (
-                    <GlassCard style={styles.noteCard} overlayColor="rgba(0,0,0,0.25)">
-                      <Text style={styles.noteText}>{step.note}</Text>
-                    </GlassCard>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text style={styles.question}>{step.question}</Text>
-                  <TouchableOpacity
-                    style={styles.hearBtn}
-                    onPress={() => speak(step.audioText, language.speechLanguage, speechRate)}
-                  >
-                    <HearLabel label="Listen again" />
-                  </TouchableOpacity>
-
-                  <View style={styles.glyphGrid}>
-                    {step.options.map((optionValue, index) => {
-                      const isCorrect = index === step.correctIndex;
-                      const isSelected = index === selectedIndex;
-                      let overlayColor = 'rgba(255,255,255,0.12)';
-                      let optionBorderColor = 'rgba(255,255,255,0.3)';
-                      if (answered && isCorrect) {
-                        overlayColor = 'rgba(76,217,100,0.35)';
-                        optionBorderColor = 'rgba(76,217,100,0.8)';
-                      } else if (answered && isSelected) {
-                        overlayColor = 'rgba(255,59,48,0.35)';
-                        optionBorderColor = 'rgba(255,59,48,0.8)';
-                      }
-                      return (
-                        <TouchableOpacity
-                          key={index}
-                          style={styles.glyphCell}
-                          onPress={() => handleAnswer(index)}
-                          disabled={answered}
-                        >
-                          <GlassCard
-                            style={styles.glyphCard}
-                            overlayColor={overlayColor}
-                            borderColor={optionBorderColor}
-                          >
-                            <Text style={styles.glyphOptionText} adjustsFontSizeToFit numberOfLines={1}>
-                              {optionValue}
-                            </Text>
-                          </GlassCard>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {answered && (
-                    <GlassCard style={styles.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
-                      <Text style={styles.feedbackText}>
-                        {selectedIndex === step.correctIndex ? step.feedbackCorrect : step.feedbackWrong}
-                      </Text>
-                    </GlassCard>
-                  )}
-                </>
-              )}
-
-              {canContinue && (
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleContinue}>
-                  <Text style={styles.primaryBtnText}>Continue</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.nameText}>{step.name}</Text>
+                <TouchableOpacity
+                  style={styles.speakerBtn}
+                  onPress={() => speak(step.name, language.speechLanguage, speechRate)}
+                >
+                  <Ionicons name="volume-high" size={18} color={colors.accentCoral} />
                 </TouchableOpacity>
+              </View>
+
+              <Card style={styles.infoCard}>
+                <View style={styles.labelRow}>
+                  <Ionicons name="chatbubble-outline" size={15} color={colors.accentCoral} style={styles.labelIcon} />
+                  <Text style={styles.infoLabel}>Example word</Text>
+                </View>
+                <View style={styles.exampleTextRow}>
+                  <Text style={styles.exampleText}>{step.example}</Text>
+                  <TouchableOpacity
+                    style={styles.speakerBtn}
+                    onPress={() => speak(step.example, language.speechLanguage, speechRate)}
+                  >
+                    <Ionicons name="volume-high" size={18} color={colors.accentCoral} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.exampleTranslation}>{step.exampleTranslation}</Text>
+              </Card>
+
+              {step.note && (
+                <Card style={styles.infoCard}>
+                  <Text style={styles.noteText}>{step.note}</Text>
+                </Card>
               )}
-            </ScrollView>
+            </>
+          ) : (
+            <>
+              <Text style={styles.question}>{step.question}</Text>
+              <TouchableOpacity
+                style={styles.hearBtn}
+                onPress={() => speak(step.audioText, language.speechLanguage, speechRate)}
+              >
+                <HearLabel label="Listen again" />
+              </TouchableOpacity>
+
+              <View style={styles.glyphGrid}>
+                {step.options.map((optionValue, index) => {
+                  const tint = optionTint(answered, index === step.correctIndex, index === selectedIndex);
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.glyphCell}
+                      onPress={() => handleAnswer(index)}
+                      disabled={answered}
+                    >
+                      <View style={[styles.glyphCard, { backgroundColor: tint.bg, borderColor: tint.border }]}>
+                        <Text style={styles.glyphOptionText} adjustsFontSizeToFit numberOfLines={1}>
+                          {optionValue}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {answered && (
+                <Card style={styles.feedbackCard}>
+                  <Text style={styles.feedbackText}>
+                    {selectedIndex === step.correctIndex ? step.feedbackCorrect : step.feedbackWrong}
+                  </Text>
+                </Card>
+              )}
+            </>
           )}
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+
+          {canContinue && (
+            <SolidButton label="Continue" onPress={handleContinue} style={styles.continueBtn} />
+          )}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  pill: {
-    flexDirection: 'row', alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 20, marginTop: 12, marginBottom: 4,
+  headerTitle: { color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium },
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
+  glassBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.glassFill, borderColor: colors.glassBorder, borderWidth: 0.5,
+    alignItems: 'center', justifyContent: 'center',
   },
-  pillText: { color: '#fff', fontSize: 13, fontWeight: '600', marginLeft: 5, ...textShadow },
+  glassBtnSpacer: { width: 32 },
   progressTrack: {
     flex: 1, height: 8, borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden', marginRight: 16,
+    backgroundColor: 'rgba(255,255,255,0.3)', overflow: 'hidden', marginHorizontal: spacing.lg,
   },
-  progressFill: {
-    height: '100%', backgroundColor: '#fff', borderRadius: 4,
-  },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  backBtn: {
-    width: 32, height: 32, borderRadius: 16, marginRight: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  backBtnSpacer: { width: 32, marginRight: 16 },
+  progressFill: { height: '100%', backgroundColor: colors.onGradient, borderRadius: 4 },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, flexGrow: 1 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl, flexGrow: 1 },
   glyphDisplay: {
-    fontSize: 120, fontWeight: '800', color: '#fff', marginBottom: 4,
-    textAlign: 'center', ...textShadow,
+    fontSize: 120, fontWeight: fontWeight.medium, color: colors.text, marginBottom: 4, textAlign: 'center',
   },
-  nameRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24,
-  },
-  nameText: {
-    fontSize: 22, color: 'rgba(255,255,255,0.9)', ...textShadow,
-  },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  nameText: { fontSize: 22, color: colors.textMuted },
   hearBtn: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
-    marginBottom: 24,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 24,
   },
-  hearBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  exampleCard: {
-    padding: 16, marginBottom: 16,
-  },
-  exampleLabel: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
+  hearBtnText: { color: colors.accentCoral, fontSize: 14, fontWeight: fontWeight.medium },
+  infoCard: { marginBottom: 16 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  labelIcon: { marginRight: 6 },
+  infoLabel: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
   exampleTextRow: { flexDirection: 'row', alignItems: 'center' },
-  exampleText: { color: '#fff', fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  exampleTranslation: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4 },
-  noteCard: {
-    padding: 12,
-  },
-  noteText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, lineHeight: 18 },
-  question: {
-    fontSize: 20, fontWeight: '700', color: '#fff', marginBottom: 22, ...textShadow,
-  },
-  glyphGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
-  },
-  glyphCell: {
-    width: '48%', marginBottom: 14,
-  },
+  exampleText: { color: colors.text, fontSize: 16, fontWeight: fontWeight.medium, flexShrink: 1 },
+  exampleTranslation: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  noteText: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  speakerBtn: { marginLeft: 12, padding: 4 },
+  question: { fontSize: 20, fontWeight: fontWeight.medium, color: colors.text, marginBottom: 22 },
+  glyphGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  glyphCell: { width: '48%', marginBottom: 14 },
   glyphCard: {
     paddingVertical: 22, alignItems: 'center', justifyContent: 'center',
+    borderRadius: radius, borderWidth: 1,
   },
-  glyphOptionText: { color: '#fff', fontSize: 40, fontWeight: '800' },
-  speakerBtn: { marginLeft: 12, padding: 4 },
-  speakerBtnText: { fontSize: 18 },
-  feedbackCard: {
-    padding: 16, marginTop: 8,
-  },
-  feedbackText: { color: '#fff', fontSize: 14, lineHeight: 20 },
-  primaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 28,
-  },
-  primaryBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 16 },
+  glyphOptionText: { color: colors.text, fontSize: 40, fontWeight: fontWeight.medium },
+  feedbackCard: { marginTop: 8 },
+  feedbackText: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  continueBtn: { marginTop: spacing.xl },
   completeContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32,
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl,
   },
-  completeEmoji: { fontSize: 64, marginBottom: 16 },
-  completeTitle: { fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 10 },
-  completeSubtitle: {
-    fontSize: 15, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 32,
-  },
+  completeEmoji: { fontSize: 64, marginBottom: spacing.lg },
+  completeTitle: { fontSize: 26, fontWeight: fontWeight.medium, color: colors.text, marginBottom: 10 },
+  completeSubtitle: { fontSize: 15, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.xxl },
+  homeBtn: { alignSelf: 'stretch' },
 });

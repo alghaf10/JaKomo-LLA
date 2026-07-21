@@ -1,6 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
-import GlassCard from '../GlassCard';
+import { View, Text } from 'react-native';
 import { stepStyles as s, HearButton } from './common';
 
 // Non-gradable: presents a vocabulary word with audio + optional note.
@@ -11,9 +10,9 @@ export default function WordStep({ step, language, speechRate }) {
       <Text style={s.translation}>{step.translation}</Text>
       <HearButton text={step.phrase} language={language} speechRate={speechRate} />
       {step.note ? (
-        <GlassCard style={s.noteCard} overlayColor="rgba(0,0,0,0.25)">
+        <View style={[s.card, s.noteCard]}>
           <Text style={s.noteText}>{step.note}</Text>
-        </GlassCard>
+        </View>
       ) : null}
     </>
   );

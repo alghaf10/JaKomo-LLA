@@ -1,18 +1,23 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage, getLessons, getLessonRouteName } from '../content';
 import { fetchProfile } from '../lib/profiles';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
+import SolidButton from '../components/SolidButton';
+import LessonBadge from '../components/LessonBadge';
 import {
   fetchLearningPlan, generateLearningPlan, regenCooldownRemaining,
 } from '../lib/learningPlan';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 const formatCooldown = (ms) => {
   const mins = Math.ceil(ms / 60000);
@@ -20,13 +25,13 @@ const formatCooldown = (ms) => {
 };
 
 export default function LearningPlanScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [languageCode, setLanguageCode] = useState('es-MX');
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
 
   const language = getLanguage(languageCode);
-  const backgrounds = getBackgrounds(language.code);
   const lessonsById = {};
   getLessons(language.code).forEach((lesson) => { lessonsById[lesson.id] = lesson; });
 
@@ -73,129 +78,134 @@ export default function LearningPlanScreen({ navigation }) {
   const planJson = plan?.plan_json;
 
   return (
-    <ImageBackground source={backgrounds.home} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backBtnText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Your Plan</Text>
-          </View>
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        <TouchableOpacity style={styles.glassBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Your Plan</Text>
+      </LinearGradient>
 
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : !planJson ? (
-              <Text style={styles.emptyText}>No plan yet — head back to Home to generate one.</Text>
-            ) : (
-              <>
-                <GlassCard style={styles.summaryCard}>
-                  <Text style={styles.summaryText}>{planJson.summary}</Text>
-                  <View style={styles.summaryMetaRow}>
-                    <Text style={styles.summaryMeta}>🎯 ~{planJson.estimated_weeks} weeks</Text>
-                    <Text style={styles.summaryMeta}>⏱ {planJson.weekly_minutes_target} min/week</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {loading ? (
+          <ActivityIndicator color={colors.accentCoral} />
+        ) : !planJson ? (
+          <Text style={styles.emptyText}>No plan yet — head back to Home to generate one.</Text>
+        ) : (
+          <>
+            <Card style={styles.summaryCard}>
+              <Text style={styles.summaryText}>{planJson.summary}</Text>
+              <View style={styles.summaryMetaRow}>
+                <View style={styles.metaItem}>
+                  <Ionicons name="flag-outline" size={14} color={colors.accentCoral} style={styles.metaIcon} />
+                  <Text style={styles.summaryMeta}>~{planJson.estimated_weeks} weeks</Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Ionicons name="time-outline" size={14} color={colors.accentCoral} style={styles.metaIcon} />
+                  <Text style={styles.summaryMeta}>{planJson.weekly_minutes_target} min/week</Text>
+                </View>
+              </View>
+            </Card>
+
+            {(planJson.milestones || []).map((milestone, index) => (
+              <Card key={`${milestone.week}-${index}`} style={styles.milestoneCard}>
+                <View style={styles.weekBadge}>
+                  <Text style={styles.weekBadgeText}>Week {milestone.week}</Text>
+                </View>
+                <Text style={styles.milestoneTitle}>{milestone.title}</Text>
+                <Text style={styles.milestoneFocus}>{milestone.focus}</Text>
+                {(milestone.recommended_lessons || []).length > 0 && (
+                  <View style={styles.chipRow}>
+                    {milestone.recommended_lessons.map((lessonId) => {
+                      const lesson = lessonsById[lessonId];
+                      if (!lesson) return null;
+                      return (
+                        <TouchableOpacity key={lessonId} style={styles.chip} onPress={() => openLesson(lessonId)}>
+                          <View style={styles.chipInner}>
+                            <LessonBadge lessonId={lesson.id} size={18} style={styles.chipBadge} />
+                            <Text style={styles.chipText}>{lesson.title}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                </GlassCard>
+                )}
+              </Card>
+            ))}
 
-                {(planJson.milestones || []).map((milestone, index) => (
-                  <GlassCard key={`${milestone.week}-${index}`} style={styles.milestoneCard}>
-                    <View style={styles.weekBadge}>
-                      <Text style={styles.weekBadgeText}>Week {milestone.week}</Text>
-                    </View>
-                    <Text style={styles.milestoneTitle}>{milestone.title}</Text>
-                    <Text style={styles.milestoneFocus}>{milestone.focus}</Text>
-                    {(milestone.recommended_lessons || []).length > 0 && (
-                      <View style={styles.chipRow}>
-                        {milestone.recommended_lessons.map((lessonId) => {
-                          const lesson = lessonsById[lessonId];
-                          if (!lesson) return null;
-                          return (
-                            <TouchableOpacity
-                              key={lessonId}
-                              style={styles.chip}
-                              onPress={() => openLesson(lessonId)}
-                            >
-                              <Text style={styles.chipText}>{lesson.emoji} {lesson.title}</Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </GlassCard>
-                ))}
+            {planJson.notes ? (
+              <Card style={styles.notesCard}>
+                <View style={styles.notesRow}>
+                  <Ionicons name="bulb-outline" size={16} color={colors.accentCoral} style={styles.notesIcon} />
+                  <Text style={styles.notesText}>{planJson.notes}</Text>
+                </View>
+              </Card>
+            ) : null}
 
-                {planJson.notes ? (
-                  <GlassCard style={styles.notesCard}>
-                    <Text style={styles.notesText}>💡 {planJson.notes}</Text>
-                  </GlassCard>
-                ) : null}
-
-                <TouchableOpacity
-                  style={styles.regenBtn}
-                  onPress={handleRegenerate}
-                  disabled={regenerating}
-                >
-                  {regenerating ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.regenBtnText}>Regenerate plan</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+            <SolidButton
+              label={regenerating ? '' : 'Regenerate plan'}
+              variant="secondary"
+              onPress={handleRegenerate}
+              disabled={regenerating}
+            />
+            {regenerating ? <ActivityIndicator color={colors.accentCoral} style={styles.regenSpinner} /> : null}
+          </>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  backBtn: {
+  glassBtn: {
     width: 32, height: 32, borderRadius: 16, marginRight: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.glassFill, borderColor: colors.glassBorder, borderWidth: 0.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  headerTitle: { color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
-  emptyText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
-  summaryCard: { padding: 18, marginBottom: 16 },
-  summaryText: { color: '#fff', fontSize: 16, fontWeight: '600', lineHeight: 23 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
+  emptyText: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
+  summaryCard: { marginBottom: 16 },
+  summaryText: { color: colors.text, fontSize: 16, fontWeight: fontWeight.medium, lineHeight: 23 },
   summaryMetaRow: { flexDirection: 'row', gap: 16, marginTop: 12 },
-  summaryMeta: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '700' },
-  milestoneCard: { padding: 18, marginBottom: 14 },
+  metaItem: { flexDirection: 'row', alignItems: 'center' },
+  metaIcon: { marginRight: 5 },
+  summaryMeta: { color: colors.textMuted, fontSize: 13, fontWeight: fontWeight.medium },
+  milestoneCard: { marginBottom: 14 },
   weekBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 10,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 10,
   },
-  weekBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  milestoneTitle: { color: '#fff', fontSize: 17, fontWeight: '700', marginBottom: 4 },
-  milestoneFocus: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
+  weekBadgeText: { color: colors.accentCoral, fontSize: 12, fontWeight: fontWeight.medium },
+  milestoneTitle: { color: colors.text, fontSize: 17, fontWeight: fontWeight.medium, marginBottom: 4 },
+  milestoneFocus: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   chip: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8,
+    backgroundColor: colors.bg,
+    borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 12, paddingVertical: 8,
   },
-  chipText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  notesCard: { padding: 16, marginBottom: 16 },
-  notesText: { color: '#fff', fontSize: 14, fontWeight: '500', lineHeight: 20 },
-  regenBtn: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 4,
-  },
-  regenBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  chipInner: { flexDirection: 'row', alignItems: 'center' },
+  chipBadge: { marginRight: 6 },
+  chipText: { color: colors.text, fontSize: 13, fontWeight: fontWeight.medium },
+  notesCard: { marginBottom: 16 },
+  notesRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  notesIcon: { marginRight: 8, marginTop: 1 },
+  notesText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: fontWeight.regular, lineHeight: 20 },
+  regenSpinner: { marginTop: 10 },
 });

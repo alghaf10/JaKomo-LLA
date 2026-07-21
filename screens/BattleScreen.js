@@ -1,24 +1,29 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Image,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator, Alert,
+  StyleSheet, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchProfile } from '../lib/profiles';
 import { fetchPublicProfiles } from '../lib/friends';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
+import SolidButton from '../components/SolidButton';
 import BattleHelpOverlay from '../components/BattleHelpOverlay';
 import {
   fetchBattleById, fetchBattlePlayers, fetchBattleMoves, buildQuestion, submitMove,
   subscribeToBattle, unsubscribeFromBattle, judgeBattle, checkOpponentEligibility,
   createChallenge, isDuplicateBattleError, MAX_MOVES_PER_PLAYER,
 } from '../lib/battles';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 const computeStreak = (playerMoves) => {
   let streak = 0;
@@ -41,10 +46,9 @@ const ANSWER_TIMER_SECONDS = 5;
 const TIMEOUT_ANSWER = '(no answer)';
 
 export default function BattleScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { battleId } = route.params;
   const isFocused = useIsFocused();
-  const language = getLanguage();
-  const backgrounds = getBackgrounds(language.code);
 
   const [userId, setUserId] = useState(null);
   const [myProfile, setMyProfile] = useState(null);
@@ -58,8 +62,6 @@ export default function BattleScreen({ route, navigation }) {
   const [answered, setAnswered] = useState(false);
   const [wasCorrect, setWasCorrect] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // 'won' | 'tie' | null — outcome of a battle finished by MY OWN move this
-  // session (a loss can only arrive via the opponent's move → battle state).
   const [justFinished, setJustFinished] = useState(null);
   const [sendingRematch, setSendingRematch] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
@@ -68,18 +70,9 @@ export default function BattleScreen({ route, navigation }) {
   const [helpVisible, setHelpVisible] = useState(false);
 
   const channelRef = useRef(null);
-  // Mirrors `answered`, but readable synchronously from the realtime
-  // handlers below without depending on a stale closure over state.
   const answeredRef = useRef(false);
-  // Monotonic id per loadBattle call, so a superseded load discards its
-  // result instead of applying stale data.
   const loadSeqRef = useRef(0);
 
-  // Everything is gathered into locals first and applied as ONE synchronous
-  // state batch at the end — a single coherent render. The old version
-  // staggered setState across six await boundaries, which flashed stale
-  // questions/timers between frames (the "next question leaks before
-  // feedback" bug).
   const loadBattle = useCallback(async () => {
     const seq = ++loadSeqRef.current;
     const wasAnsweredAtStart = answeredRef.current;
@@ -115,9 +108,6 @@ export default function BattleScreen({ route, navigation }) {
 
     let currentBattle = battleData;
 
-    // Deadlock guard: a tie is normally recorded by the judge invoked on the
-    // final move — if that invocation was lost (network blip), the battle
-    // would sit 'active' forever with no playable moves. Settle it here.
     if (
       currentBattle?.status === 'active'
       && mine.length >= MAX_MOVES_PER_PLAYER
@@ -144,9 +134,6 @@ export default function BattleScreen({ route, navigation }) {
       nextQuestion = q;
     }
 
-    // Discard stale results: a newer load has started, or the player tapped
-    // an answer while this load was in flight (their feedback must not be
-    // overwritten by data gathered before the tap).
     if (seq !== loadSeqRef.current) return;
     if (!wasAnsweredAtStart && answeredRef.current) return;
 
@@ -166,10 +153,6 @@ export default function BattleScreen({ route, navigation }) {
     setLoading(false);
   }, [battleId]);
 
-  // A live event while the player is looking at their own just-answered
-  // feedback would otherwise yank it away mid-read (loadBattle resets
-  // `answered` and rebuilds the question) -- so skip the refresh until
-  // they've moved on themselves via the Done button.
   const handleLiveUpdate = useCallback(() => {
     if (answeredRef.current) return;
     loadBattle();
@@ -207,15 +190,13 @@ export default function BattleScreen({ route, navigation }) {
       console.log('Error submitting move:', error);
       return;
     }
-    // Reflect my own move in the streak dots immediately — the realtime echo
-    // of it is suppressed while the feedback card is up (answeredRef guard).
     setMyMoves((prev) => [...prev, { question: question.correctPhrase, is_correct: isCorrect }]);
-    // My own move can end the battle as my win (streak) or as a tie (final
-    // move exhausted with no streak) — never as my loss.
     if (result?.finished && !result?.alreadyProcessed) {
       setJustFinished(result.winnerSide === null ? 'tie' : 'won');
     }
   };
+
+  const opponentName = opponentProfile?.first_name || 'Opponent';
 
   const handlePlayAgain = async () => {
     const opponentId = opponentProfile?.user_id;
@@ -249,18 +230,12 @@ export default function BattleScreen({ route, navigation }) {
     ]);
   };
 
-  // Leave the feedback card and re-enter the live flow: feedback stays on
-  // screen (button spinner) until loadBattle's single atomic batch swaps in
-  // the next coherent view — clearing `answered` here first is what used to
-  // flash a stale question card during the reload.
   const handleContinue = () => {
     if (continuing) return;
     setContinuing(true);
     loadBattle();
   };
 
-  // First-time help: shown once per user (device-local flag) before their
-  // first battle; the (?) header button reopens it anytime.
   const helpCheckedRef = useRef(false);
   useEffect(() => {
     if (!userId || helpCheckedRef.current) return;
@@ -278,10 +253,6 @@ export default function BattleScreen({ route, navigation }) {
     }
   };
 
-  // Soft client-side answer timer. Deadline-based (not tick-counting) so it
-  // can't drift; cancels on answer (`answered` dep + cleanup), on blur
-  // (`isFocused`), on unmount, and while the help overlay is up (a
-  // first-timer must not lose their first question while reading the rules).
   useEffect(() => {
     if (!isFocused || !question || answered || helpVisible) {
       setTimeLeft(null);
@@ -300,7 +271,6 @@ export default function BattleScreen({ route, navigation }) {
     return () => clearInterval(interval);
   }, [isFocused, question, answered, helpVisible]);
 
-  const opponentName = opponentProfile?.first_name || 'Opponent';
   const myStreak = computeStreak(myMoves);
   const opponentStreak = computeStreak(opponentMoves);
   const isMyTurn = battle?.status === 'active' && battle?.turn_user === userId;
@@ -312,6 +282,7 @@ export default function BattleScreen({ route, navigation }) {
   }
   const isFinished = outcome !== null;
 
+  // Result emoji kept — expressive content.
   const RESULT_CONTENT = {
     won: { emoji: '🏆', text: 'You won!' },
     lost: { emoji: '😔', text: 'You lost this one' },
@@ -319,209 +290,180 @@ export default function BattleScreen({ route, navigation }) {
   };
 
   return (
-    <ImageBackground source={backgrounds.home} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backBtnText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle} numberOfLines={1}>vs {opponentName}</Text>
-            <TouchableOpacity style={styles.helpBtn} onPress={() => setHelpVisible(true)}>
-              <Text style={styles.helpBtnText}>?</Text>
-            </TouchableOpacity>
-          </View>
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        <TouchableOpacity style={styles.glassBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>vs {opponentName}</Text>
+        <TouchableOpacity style={styles.glassBtn} onPress={() => setHelpVisible(true)}>
+          <Ionicons name="help" size={18} color={colors.onGradient} />
+        </TouchableOpacity>
+      </LinearGradient>
 
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : !battle ? (
-              <Text style={styles.emptyText}>This battle is no longer available.</Text>
-            ) : (
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {loading ? (
+          <ActivityIndicator color={colors.accentCoral} />
+        ) : !battle ? (
+          <Text style={styles.emptyText}>This battle is no longer available.</Text>
+        ) : (
+          <>
+            <Card style={styles.playersCard}>
+              <View style={styles.playerRow}>
+                <Image source={getAvatarSource(opponentProfile?.avatar_id)} style={styles.playerAvatar} />
+                <Text style={styles.playerName} numberOfLines={1}>{opponentName}</Text>
+                <StreakDots streak={opponentStreak} />
+              </View>
+              <View style={styles.playerRow}>
+                <Image source={getAvatarSource(myProfile?.avatar_id)} style={styles.playerAvatar} />
+                <Text style={styles.playerName}>You</Text>
+                <StreakDots streak={myStreak} />
+              </View>
+            </Card>
+
+            {isFinished ? (
               <>
-                <GlassCard style={styles.playersCard}>
-                  <View style={styles.playerRow}>
-                    <Image source={getAvatarSource(opponentProfile?.avatar_id)} style={styles.playerAvatar} />
-                    <Text style={styles.playerName} numberOfLines={1}>{opponentName}</Text>
-                    <StreakDots streak={opponentStreak} />
-                  </View>
-                  <View style={styles.playerRow}>
-                    <Image source={getAvatarSource(myProfile?.avatar_id)} style={styles.playerAvatar} />
-                    <Text style={styles.playerName}>You</Text>
-                    <StreakDots streak={myStreak} />
-                  </View>
-                </GlassCard>
-
-                {isFinished ? (
-                  <>
-                    <GlassCard style={styles.resultCard}>
-                      <Text style={styles.resultEmoji}>{RESULT_CONTENT[outcome].emoji}</Text>
-                      <Text style={styles.resultText}>{RESULT_CONTENT[outcome].text}</Text>
-                    </GlassCard>
-                    <TouchableOpacity
-                      style={styles.primaryBtn}
-                      onPress={handlePlayAgain}
-                      disabled={sendingRematch}
-                    >
-                      {sendingRematch ? (
-                        <ActivityIndicator color="#1a1a1a" />
-                      ) : (
-                        <Text style={styles.primaryBtnText}>Play Again</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.goBack()}>
-                      <Text style={styles.secondaryBtnText}>Back to Battles</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : answered ? (
-                  <>
-                    <GlassCard
-                      style={styles.feedbackCard}
-                      overlayColor={wasCorrect ? 'rgba(76,217,100,0.25)' : 'rgba(255,59,48,0.25)'}
-                      borderColor={wasCorrect ? 'rgba(76,217,100,0.8)' : 'rgba(255,59,48,0.8)'}
-                    >
-                      <Text style={styles.feedbackText}>
-                        {wasCorrect
-                          ? '¡Correcto!'
-                          : wasTimeout
-                            ? `⏱ Time's up — it was "${question?.correctPhrase}"`
-                            : `Not quite — it was "${question?.correctPhrase}"`}
-                      </Text>
-                    </GlassCard>
-                    <TouchableOpacity style={styles.primaryBtn} onPress={handleContinue} disabled={continuing}>
-                      {continuing ? (
-                        <ActivityIndicator color="#1a1a1a" />
-                      ) : (
-                        <Text style={styles.primaryBtnText}>Continue</Text>
-                      )}
-                    </TouchableOpacity>
-                  </>
-                ) : isMyTurn && question ? (
-                  <GlassCard style={styles.questionCard}>
-                    <View style={styles.timerRow}>
-                      <Text style={styles.cardLabel}>Your turn</Text>
-                      {timeLeft !== null && (
-                        <Text style={styles.timerText}>{Math.ceil(timeLeft)}</Text>
-                      )}
-                    </View>
-                    {timeLeft !== null && (
-                      <View style={styles.timerTrack}>
-                        <View
-                          style={[
-                            styles.timerFill,
-                            { width: `${(timeLeft / ANSWER_TIMER_SECONDS) * 100}%` },
-                          ]}
-                        />
-                      </View>
-                    )}
-                    <Text style={styles.question}>What's the Spanish for "{question.prompt}"?</Text>
-                    {question.options.map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        onPress={() => handleAnswer(option)}
-                        disabled={answered || submitting}
-                      >
-                        <GlassCard style={styles.option}>
-                          <Text style={styles.optionText}>{option}</Text>
-                        </GlassCard>
-                      </TouchableOpacity>
-                    ))}
-                  </GlassCard>
-                ) : isMyTurn && !question ? (
-                  <GlassCard style={styles.card}>
-                    <Text style={styles.emptyText}>
-                      {opponentName} doesn't have any new words left to quiz you on right now.
-                    </Text>
-                  </GlassCard>
-                ) : (
-                  <GlassCard style={styles.card}>
-                    <Text style={styles.emptyText}>Waiting for their move...</Text>
-                  </GlassCard>
-                )}
+                <Card style={styles.resultCard}>
+                  <Text style={styles.resultEmoji}>{RESULT_CONTENT[outcome].emoji}</Text>
+                  <Text style={styles.resultText}>{RESULT_CONTENT[outcome].text}</Text>
+                </Card>
+                <SolidButton
+                  label={sendingRematch ? '' : 'Play Again'}
+                  onPress={handlePlayAgain}
+                  disabled={sendingRematch}
+                />
+                {sendingRematch ? <ActivityIndicator color={colors.accentCoral} style={styles.inlineSpinner} /> : null}
+                <SolidButton
+                  label="Back to Battles"
+                  variant="secondary"
+                  onPress={() => navigation.goBack()}
+                  style={styles.secondaryBtn}
+                />
               </>
+            ) : answered ? (
+              <>
+                <View style={[styles.feedbackCard, wasCorrect ? styles.feedbackCorrect : styles.feedbackWrong]}>
+                  <Text style={styles.feedbackText}>
+                    {wasCorrect
+                      ? '¡Correcto!'
+                      : wasTimeout
+                        ? `Time's up — it was "${question?.correctPhrase}"`
+                        : `Not quite — it was "${question?.correctPhrase}"`}
+                  </Text>
+                </View>
+                <SolidButton
+                  label={continuing ? '' : 'Continue'}
+                  onPress={handleContinue}
+                  disabled={continuing}
+                />
+                {continuing ? <ActivityIndicator color={colors.accentCoral} style={styles.inlineSpinner} /> : null}
+              </>
+            ) : isMyTurn && question ? (
+              <Card style={styles.questionCard}>
+                <View style={styles.timerRow}>
+                  <Text style={styles.cardLabel}>Your turn</Text>
+                  {timeLeft !== null && (
+                    <Text style={styles.timerText}>{Math.ceil(timeLeft)}</Text>
+                  )}
+                </View>
+                {timeLeft !== null && (
+                  <View style={styles.timerTrack}>
+                    <View style={[styles.timerFill, { width: `${(timeLeft / ANSWER_TIMER_SECONDS) * 100}%` }]} />
+                  </View>
+                )}
+                <Text style={styles.question}>What&apos;s the Spanish for &quot;{question.prompt}&quot;?</Text>
+                {question.options.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    onPress={() => handleAnswer(option)}
+                    disabled={answered || submitting}
+                  >
+                    <View style={styles.option}>
+                      <Text style={styles.optionText}>{option}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </Card>
+            ) : isMyTurn && !question ? (
+              <Card style={styles.card}>
+                <Text style={styles.emptyText}>
+                  {opponentName} doesn&apos;t have any new words left to quiz you on right now.
+                </Text>
+              </Card>
+            ) : (
+              <Card style={styles.card}>
+                <Text style={styles.emptyText}>Waiting for their move...</Text>
+              </Card>
             )}
-          </ScrollView>
+          </>
+        )}
+      </ScrollView>
 
-          <BattleHelpOverlay visible={helpVisible} onClose={handleCloseHelp} />
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+      <BattleHelpOverlay visible={helpVisible} onClose={handleCloseHelp} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  backBtn: {
-    width: 32, height: 32, borderRadius: 16, marginRight: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  glassBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.glassFill, borderColor: colors.glassBorder, borderWidth: 0.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
-  helpBtn: {
-    width: 32, height: 32, borderRadius: 16, marginLeft: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+  headerTitle: {
+    flex: 1, color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium,
+    marginHorizontal: 14,
   },
-  helpBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
-  emptyText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
-  playersCard: { padding: 18, marginBottom: 16 },
-  playerRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 6,
-  },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
+  emptyText: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
+  playersCard: { marginBottom: spacing.lg },
+  playerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
   playerAvatar: {
     width: 36, height: 36, borderRadius: 18, marginRight: 12,
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    borderColor: colors.border, borderWidth: 1,
   },
-  playerName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
-  streakDots: { color: '#fff', fontSize: 16, letterSpacing: 2 },
-  card: { padding: 18, marginBottom: 16 },
+  playerName: { flex: 1, color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
+  streakDots: { color: colors.accentCoral, fontSize: 16, letterSpacing: 2 },
+  card: { marginBottom: spacing.lg },
   cardLabel: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700',
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
   },
-  questionCard: { padding: 18, marginBottom: 16 },
-  timerRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  timerText: { color: '#ffc400', fontSize: 18, fontWeight: '800', marginBottom: 10 },
+  questionCard: { marginBottom: spacing.lg },
+  timerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timerText: { color: colors.accentCoral, fontSize: 18, fontWeight: fontWeight.medium, marginBottom: 10 },
   timerTrack: {
     height: 6, borderRadius: 3, marginBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.bg, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  timerFill: {
-    height: '100%', borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+  timerFill: { height: '100%', borderRadius: 3, backgroundColor: colors.accentCoral },
+  question: { fontSize: 18, fontWeight: fontWeight.medium, color: colors.text, marginBottom: 16 },
+  option: {
+    padding: 14, marginBottom: 10, borderRadius: radius,
+    backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1,
   },
-  question: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 16 },
-  option: { padding: 14, marginBottom: 10 },
-  optionText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  feedbackCard: { padding: 16, marginBottom: 16 },
-  feedbackText: { color: '#fff', fontSize: 14, lineHeight: 20 },
-  primaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, padding: 16, alignItems: 'center',
-  },
-  primaryBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 16 },
-  secondaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 12,
-  },
-  secondaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  resultCard: {
-    padding: 24, alignItems: 'center', marginBottom: 16,
-  },
+  optionText: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
+  feedbackCard: { padding: 16, marginBottom: 16, borderRadius: radius, borderWidth: 1 },
+  feedbackCorrect: { backgroundColor: colors.successTint, borderColor: colors.success },
+  feedbackWrong: { backgroundColor: colors.dangerTint, borderColor: colors.danger },
+  feedbackText: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  inlineSpinner: { marginTop: 10 },
+  secondaryBtn: { marginTop: 12 },
+  resultCard: { alignItems: 'center', paddingVertical: 24, marginBottom: spacing.lg },
   resultEmoji: { fontSize: 48, marginBottom: 10 },
-  resultText: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  resultText: { color: colors.text, fontSize: 20, fontWeight: fontWeight.medium },
 });

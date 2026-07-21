@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import FriendsScreen from './FriendsScreen';
 import GroupsScreen from './GroupsScreen';
 import BattlesScreen from './BattlesScreen';
+import { colors, radius, fontWeight } from '../theme';
 
 const SEGMENTS = [
   { key: 'friends', label: 'Friends' },
@@ -39,16 +40,17 @@ export default function SocialScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Sits on the gradient header — glass track, solid white active pill.
   segmentedControl: {
     flex: 1, flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderColor: 'rgba(255,255,255,0.3)', borderWidth: 1,
-    borderRadius: 14, padding: 4,
+    backgroundColor: colors.glassFill,
+    borderColor: colors.glassBorder, borderWidth: 0.5,
+    borderRadius: radius, padding: 4,
   },
   segmentBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 10,
+    flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius - 4,
   },
-  segmentBtnActive: { backgroundColor: 'rgba(255,255,255,0.9)' },
-  segmentText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  segmentTextActive: { color: '#1a1a1a' },
+  segmentBtnActive: { backgroundColor: colors.onGradient },
+  segmentText: { color: colors.onGradient, fontSize: 13, fontWeight: fontWeight.medium },
+  segmentTextActive: { color: colors.accentCoral },
 });

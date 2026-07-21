@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { isUsernameAvailable, USERNAME_REGEX, RESERVED_USERNAMES } from '../lib/profiles';
+import { colors, radius, fontWeight } from '../theme';
 
 const DEBOUNCE_MS = 400;
 const MAX_USERNAME_LEN = 20;
@@ -38,14 +40,16 @@ const buildCandidates = (base) => {
   return candidates;
 };
 
+// Availability states carry a theme color and (for the pass/fail states) an
+// Ionicons name that replaces the old ✓/✗ emoji.
 const STATUS_CONTENT = {
   idle: null,
-  invalid: { text: '3–20 characters, letters, numbers or _, starting with a letter', color: '#ffb4b4' },
-  reserved: { text: 'That name is reserved', color: '#ffb4b4' },
-  checking: { text: 'Checking availability…', color: 'rgba(255,255,255,0.7)' },
-  available: { text: '✓ Available', color: 'rgba(120,235,150,0.95)' },
-  taken: { text: '✗ Already taken', color: '#ffb4b4' },
-  error: { text: "Couldn't check availability — keep typing to retry", color: '#ffb4b4' },
+  invalid: { text: '3–20 characters, letters, numbers or _, starting with a letter', color: colors.danger },
+  reserved: { text: 'That name is reserved', color: colors.danger },
+  checking: { text: 'Checking availability…', color: colors.textMuted },
+  available: { text: 'Available', color: colors.success, icon: 'checkmark' },
+  taken: { text: 'Already taken', color: colors.danger, icon: 'close' },
+  error: { text: "Couldn't check availability — keep typing to retry", color: colors.danger },
 };
 
 // Shared by signup, the ChooseUsername screen, and the complete-profile
@@ -121,7 +125,7 @@ export default function UsernameField({ value, onChangeText, editable = true, on
       <TextInput
         style={styles.input}
         placeholder="Username"
-        placeholderTextColor="rgba(255,255,255,0.7)"
+        placeholderTextColor={colors.textMuted}
         value={value}
         onChangeText={onChangeText}
         autoCapitalize="none"
@@ -130,9 +134,14 @@ export default function UsernameField({ value, onChangeText, editable = true, on
         editable={editable}
       />
       {statusContent && (
-        <Text style={[styles.statusText, { color: statusContent.color }]}>
-          {statusContent.text}
-        </Text>
+        <View style={styles.statusRow}>
+          {statusContent.icon && (
+            <Ionicons name={statusContent.icon} size={14} color={statusContent.color} style={styles.statusIcon} />
+          )}
+          <Text style={[styles.statusText, { color: statusContent.color }]}>
+            {statusContent.text}
+          </Text>
+        </View>
       )}
       {status === 'taken' && suggestions.length > 0 && (
         <View style={styles.suggestionsRow}>
@@ -154,17 +163,19 @@ export default function UsernameField({ value, onChangeText, editable = true, on
 
 const styles = StyleSheet.create({
   input: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, padding: 15, color: '#fff', fontSize: 16,
+    backgroundColor: colors.bg,
+    borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, padding: 15, color: colors.text, fontSize: 16,
     marginBottom: 6,
   },
-  statusText: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  statusIcon: { marginRight: 5 },
+  statusText: { fontSize: 13, fontWeight: fontWeight.medium },
   suggestionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   suggestionChip: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 12, paddingVertical: 7,
   },
-  suggestionChipText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  suggestionChipText: { color: colors.accentCoral, fontSize: 13, fontWeight: fontWeight.medium },
 });

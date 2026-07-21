@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
-import GlassCard from '../GlassCard';
 import { isAcceptable } from '../../lib/answerCheck';
+import { colors } from '../../theme';
 import { stepStyles as s } from './common';
 
 // Gradable: type the missing word into a sentence frame. `frame` contains a
@@ -28,7 +28,7 @@ export default function FillStep({ step, onResolve }) {
       {step.prompt ? <Text style={s.prompt}>{step.prompt}</Text> : null}
       <Text style={s.cue}>
         {parts[0]}
-        <Text style={{ fontWeight: '800', color: '#fff' }}>{blank}</Text>
+        <Text style={{ fontWeight: '700', color: colors.text }}>{blank}</Text>
         {parts[1] || ''}
       </Text>
       <TextInput
@@ -42,13 +42,13 @@ export default function FillStep({ step, onResolve }) {
         autoCorrect={false}
       />
       {answered ? (
-        <GlassCard style={s.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
+        <View style={[s.card, s.feedbackCard]}>
           <Text style={s.feedbackText}>
             {correct
               ? (step.feedbackCorrect || '¡Correcto!')
               : (step.feedbackWrong || `Not quite — the answer is "${step.answer}".`)}
           </Text>
-        </GlassCard>
+        </View>
       ) : (
         <TouchableOpacity
           style={[s.checkBtn, !value.trim() && s.checkBtnDisabled]}

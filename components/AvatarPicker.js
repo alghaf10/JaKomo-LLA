@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { AVATARS } from '../lib/avatars';
+import { colors } from '../theme';
 
 const AVATAR_SIZE = 64;
 const ROWS = [AVATARS.slice(0, 4), AVATARS.slice(4, 8)];
@@ -33,11 +34,11 @@ const styles = StyleSheet.create({
   },
   swatch: {
     width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 2, borderColor: colors.border,
     overflow: 'hidden',
   },
   swatchSelected: {
-    borderColor: '#ffffff', borderWidth: 3,
+    borderColor: colors.accentCoral, borderWidth: 3,
   },
   image: { width: '100%', height: '100%' },
 });

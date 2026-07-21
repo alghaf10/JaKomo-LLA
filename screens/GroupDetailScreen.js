@@ -1,26 +1,28 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Image,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator, Alert,
+  StyleSheet, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
-import { getLanguage } from '../content';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchPublicProfiles } from '../lib/friends';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
 import {
   fetchGroupById, fetchGroupMemberRows, renameGroup,
   toggleGroupVisibility, leaveGroup, deleteGroup,
 } from '../lib/groups';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 export default function GroupDetailScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { groupId } = route.params;
-  const language = getLanguage();
-  const backgrounds = getBackgrounds(language.code);
 
   const [myUserId, setMyUserId] = useState(null);
   const [group, setGroup] = useState(null);
@@ -159,257 +161,232 @@ export default function GroupDetailScreen({ route, navigation }) {
   };
 
   return (
-    <ImageBackground source={backgrounds.home} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backBtnText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle} numberOfLines={1}>{group?.name || 'Group'}</Text>
-          </View>
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        <TouchableOpacity style={styles.glassBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>{group?.name || 'Group'}</Text>
+      </LinearGradient>
 
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : !group ? (
-              <Text style={styles.emptyText}>This group is no longer available.</Text>
-            ) : (
-              <>
-                {/* Join code */}
-                <GlassCard style={styles.card}>
-                  <Text style={styles.cardLabel}>Join Code</Text>
-                  <View style={styles.friendCodeRow}>
-                    <Text style={styles.friendCodeText}>{group.join_code}</Text>
-                    <TouchableOpacity style={styles.copyBtn} onPress={handleCopyCode}>
-                      <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy'}</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {loading ? (
+          <ActivityIndicator color={colors.accentCoral} />
+        ) : !group ? (
+          <Text style={styles.emptyText}>This group is no longer available.</Text>
+        ) : (
+          <>
+            {/* Join code */}
+            <Card style={styles.card}>
+              <Text style={styles.cardLabel}>Join Code</Text>
+              <View style={styles.friendCodeRow}>
+                <Text style={styles.friendCodeText}>{group.join_code}</Text>
+                <TouchableOpacity style={styles.copyBtn} onPress={handleCopyCode}>
+                  <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy'}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.hintText}>Share this so friends can join</Text>
+            </Card>
+
+            <TouchableOpacity
+              style={styles.chatBtn}
+              onPress={() => navigation.navigate('GroupChat', {
+                groupId, groupName: group.name, isOwner,
+              })}
+            >
+              <Ionicons name="chatbubble-outline" size={16} color={colors.onGradient} style={styles.chatIcon} />
+              <Text style={styles.chatBtnText}>Chat</Text>
+            </TouchableOpacity>
+
+            {/* Owner controls */}
+            {isOwner && (
+              <Card style={styles.card}>
+                <Text style={styles.cardLabel}>Manage Group</Text>
+
+                {renaming ? (
+                  <View style={styles.searchRow}>
+                    <TextInput
+                      style={styles.searchInput}
+                      value={draftName}
+                      onChangeText={setDraftName}
+                      editable={!savingName}
+                      autoFocus
+                    />
+                    <TouchableOpacity style={styles.searchBtn} onPress={handleSaveName} disabled={savingName}>
+                      {savingName ? (
+                        <ActivityIndicator color={colors.onGradient} />
+                      ) : (
+                        <Text style={styles.searchBtnText}>Save</Text>
+                      )}
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.friendHintText}>Share this so friends can join</Text>
-                </GlassCard>
-
-                <TouchableOpacity
-                  style={styles.chatBtn}
-                  onPress={() => navigation.navigate('GroupChat', {
-                    groupId, groupName: group.name, isOwner,
-                  })}
-                >
-                  <Text style={styles.chatBtnText}>💬 Chat</Text>
-                </TouchableOpacity>
-
-                {/* Owner controls */}
-                {isOwner && (
-                  <GlassCard style={styles.card}>
-                    <Text style={styles.cardLabel}>Manage Group</Text>
-
-                    {renaming ? (
-                      <View style={styles.searchRow}>
-                        <TextInput
-                          style={styles.searchInput}
-                          value={draftName}
-                          onChangeText={setDraftName}
-                          editable={!savingName}
-                          autoFocus
-                        />
-                        <TouchableOpacity style={styles.searchBtn} onPress={handleSaveName} disabled={savingName}>
-                          {savingName ? (
-                            <ActivityIndicator color="#1a1a1a" />
-                          ) : (
-                            <Text style={styles.searchBtnText}>Save</Text>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity style={styles.neutralBtn} onPress={handleStartRename}>
-                        <Text style={styles.neutralBtnText}>Rename Group</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    <View style={styles.visibilityRow}>
-                      <View style={styles.groupInfo}>
-                        <Text style={styles.visibilityLabel}>
-                          {group.is_public ? 'Public' : 'Private'}
-                        </Text>
-                        <Text style={styles.friendHintText}>
-                          {group.is_public
-                            ? 'Findable in search and joinable by code.'
-                            : 'Joinable by code only.'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.neutralBtn}
-                        onPress={handleToggleVisibility}
-                        disabled={togglingVisibility}
-                      >
-                        {togglingVisibility ? (
-                          <ActivityIndicator color="#fff" />
-                        ) : (
-                          <Text style={styles.neutralBtnText}>
-                            Make {group.is_public ? 'Private' : 'Public'}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </GlassCard>
-                )}
-
-                {/* Members */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Members</Text>
-                  {/*
-                    No kick-member affordance: group_members DELETE RLS is
-                    self-only, so an owner can't remove other members.
-                  */}
-                  {members.map((member) => (
-                    <GlassCard key={member.user_id} style={styles.personRow}>
-                      <Image
-                        source={getAvatarSource(member.profile?.avatar_id)}
-                        style={styles.personAvatar}
-                      />
-                      <View style={styles.personInfo}>
-                        <Text style={styles.personName} numberOfLines={1}>
-                          {member.profile?.first_name || 'Someone'}
-                        </Text>
-                      </View>
-                      {member.user_id === group.owner_id && (
-                        <View style={styles.ownerBadge}>
-                          <Text style={styles.ownerBadgeText}>Owner</Text>
-                        </View>
-                      )}
-                    </GlassCard>
-                  ))}
-                </View>
-
-                {/* Leave / Delete */}
-                {isOwner ? (
-                  <TouchableOpacity
-                    style={styles.dangerBtn}
-                    onPress={handleDeleteGroup}
-                    disabled={deleting}
-                  >
-                    {deleting ? (
-                      <ActivityIndicator color="#ff8080" />
-                    ) : (
-                      <Text style={styles.dangerBtnText}>Delete Group</Text>
-                    )}
-                  </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity
-                    style={styles.dangerBtn}
-                    onPress={handleLeaveGroup}
-                    disabled={leaving}
-                  >
-                    {leaving ? (
-                      <ActivityIndicator color="#ff8080" />
-                    ) : (
-                      <Text style={styles.dangerBtnText}>Leave Group</Text>
-                    )}
+                  <TouchableOpacity style={styles.neutralBtn} onPress={handleStartRename}>
+                    <Text style={styles.neutralBtnText}>Rename Group</Text>
                   </TouchableOpacity>
                 )}
-              </>
+
+                <View style={styles.visibilityRow}>
+                  <View style={styles.groupInfo}>
+                    <Text style={styles.visibilityLabel}>
+                      {group.is_public ? 'Public' : 'Private'}
+                    </Text>
+                    <Text style={styles.hintText}>
+                      {group.is_public
+                        ? 'Findable in search and joinable by code.'
+                        : 'Joinable by code only.'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.neutralBtn}
+                    onPress={handleToggleVisibility}
+                    disabled={togglingVisibility}
+                  >
+                    {togglingVisibility ? (
+                      <ActivityIndicator color={colors.accentCoral} />
+                    ) : (
+                      <Text style={styles.neutralBtnText}>
+                        Make {group.is_public ? 'Private' : 'Public'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </Card>
             )}
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+
+            {/* Members */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Members</Text>
+              {/*
+                No kick-member affordance: group_members DELETE RLS is
+                self-only, so an owner can't remove other members.
+              */}
+              {members.map((member) => (
+                <Card key={member.user_id} style={styles.personRow}>
+                  <Image source={getAvatarSource(member.profile?.avatar_id)} style={styles.avatar} />
+                  <View style={styles.personInfo}>
+                    <Text style={styles.personName} numberOfLines={1}>
+                      {member.profile?.first_name || 'Someone'}
+                    </Text>
+                  </View>
+                  {member.user_id === group.owner_id && (
+                    <View style={styles.ownerBadge}>
+                      <Text style={styles.ownerBadgeText}>Owner</Text>
+                    </View>
+                  )}
+                </Card>
+              ))}
+            </View>
+
+            {/* Leave / Delete */}
+            {isOwner ? (
+              <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteGroup} disabled={deleting}>
+                {deleting ? (
+                  <ActivityIndicator color={colors.danger} />
+                ) : (
+                  <Text style={styles.dangerBtnText}>Delete Group</Text>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.dangerBtn} onPress={handleLeaveGroup} disabled={leaving}>
+                {leaving ? (
+                  <ActivityIndicator color={colors.danger} />
+                ) : (
+                  <Text style={styles.dangerBtnText}>Leave Group</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  backBtn: {
+  glassBtn: {
     width: 32, height: 32, borderRadius: 16, marginRight: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.glassFill, borderColor: colors.glassBorder, borderWidth: 0.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  headerTitle: { flex: 1, color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
-  emptyText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
-  card: {
-    padding: 18, marginBottom: 16,
-  },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
+  emptyText: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
+  card: { marginBottom: spacing.lg },
   cardLabel: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700',
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
   },
   friendCodeRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10,
   },
-  friendCodeText: { color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: 1 },
+  friendCodeText: { color: colors.text, fontSize: 22, fontWeight: fontWeight.medium, letterSpacing: 1 },
   copyBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 14, paddingVertical: 8,
   },
-  copyBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  friendHintText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
+  copyBtnText: { color: colors.accentCoral, fontSize: 13, fontWeight: fontWeight.medium },
+  hintText: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   chatBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, paddingVertical: 14,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 16,
+    flexDirection: 'row', backgroundColor: colors.accentCoral,
+    borderRadius: radius, paddingVertical: 14,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
   },
-  chatBtnText: { color: '#1a1a1a', fontSize: 15, fontWeight: '700' },
+  chatIcon: { marginRight: 8 },
+  chatBtnText: { color: colors.onGradient, fontSize: 15, fontWeight: fontWeight.medium },
   searchRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   searchInput: {
     flex: 1, height: 48,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, paddingHorizontal: 14, color: '#fff', fontSize: 15,
+    backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 14, color: colors.text, fontSize: 15,
   },
   searchBtn: {
-    height: 48, backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, paddingHorizontal: 18,
-    alignItems: 'center', justifyContent: 'center',
+    height: 48, backgroundColor: colors.accentCoral,
+    borderRadius: radius, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center',
   },
-  searchBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 14 },
+  searchBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 14 },
   neutralBtn: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 14,
+    backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 12, paddingVertical: 10,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
   },
-  neutralBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  visibilityRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
+  neutralBtnText: { color: colors.text, fontSize: 13, fontWeight: fontWeight.medium },
+  visibilityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   groupInfo: { flex: 1, marginRight: 8 },
-  visibilityLabel: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  visibilityLabel: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
   section: { marginBottom: 24 },
-  sectionTitle: {
-    color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14, ...textShadow,
-  },
-  personRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, marginBottom: 12,
-  },
-  personAvatar: {
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: fontWeight.medium, marginBottom: 14 },
+  personRow: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 12 },
+  avatar: {
     width: 40, height: 40, borderRadius: 20, marginRight: 12,
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    borderColor: colors.border, borderWidth: 1,
   },
   personInfo: { flex: 1, marginRight: 8 },
-  personName: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  personName: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
   ownerBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 10, paddingVertical: 5,
   },
-  ownerBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  ownerBadgeText: { color: colors.accentCoral, fontSize: 11, fontWeight: fontWeight.medium },
   dangerBtn: {
-    backgroundColor: 'rgba(255,90,90,0.2)',
-    borderColor: 'rgba(255,90,90,0.6)', borderWidth: 1,
-    borderRadius: 14, paddingVertical: 14,
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.dangerTint,
+    borderColor: colors.danger, borderWidth: 0.5,
+    borderRadius: radius, paddingVertical: 14, alignItems: 'center', justifyContent: 'center',
   },
-  dangerBtnText: { color: '#ff8080', fontSize: 14, fontWeight: '700' },
+  dangerBtnText: { color: colors.danger, fontSize: 14, fontWeight: fontWeight.medium },
 });

@@ -2,6 +2,11 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 
+// Frosted dark card for ON-GRADIENT / on-image surfaces. Still used by:
+//   - LanguageSelectScreen (full-bleed image background)
+//   - any glass surface sitting on the brand gradient
+// The lesson-family + Profile screens moved to the light theme (Card + theme
+// tokens) in the v3 restyle and no longer use this.
 export default function GlassCard({
   children,
   style,

@@ -1,24 +1,28 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, Image,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator,
+  StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchPublicProfiles } from '../lib/friends';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
 import { useSocialBadge } from '../contexts/SocialBadgeContext';
 import {
   fetchIncomingChallenges, fetchMyActiveBattles, fetchFinishedBattles,
   fetchPlayersForBattles, acceptChallenge, declineChallenge,
 } from '../lib/battles';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 export default function BattlesScreen({ navigation, headerContent }) {
+  const insets = useSafeAreaInsets();
   const { refreshBattleAwaitingCount } = useSocialBadge();
   const [userId, setUserId] = useState(null);
   const [language, setLanguage] = useState(getLanguage());
@@ -27,8 +31,6 @@ export default function BattlesScreen({ navigation, headerContent }) {
   const [activeBattles, setActiveBattles] = useState([]);
   const [finishedBattles, setFinishedBattles] = useState([]);
   const [actioningId, setActioningId] = useState(null);
-
-  const backgrounds = getBackgrounds(language.code);
 
   const loadBattlesData = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -121,206 +123,174 @@ export default function BattlesScreen({ navigation, headerContent }) {
   };
 
   return (
-    <ImageBackground source={backgrounds.home} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            {headerContent || <Text style={styles.headerTitle}>Battles</Text>}
-          </View>
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        {headerContent || <Text style={styles.headerTitle}>Battles</Text>}
+      </LinearGradient>
 
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                {incomingChallenges.length > 0 && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Challenges</Text>
-                    {incomingChallenges.map((battle) => (
-                      <GlassCard key={battle.id} style={styles.personRow}>
-                        <Image
-                          source={getAvatarSource(battle.opponent?.avatar_id)}
-                          style={styles.personAvatar}
-                        />
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {loading ? (
+          <ActivityIndicator color={colors.accentCoral} />
+        ) : (
+          <>
+            {incomingChallenges.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Challenges</Text>
+                {incomingChallenges.map((battle) => (
+                  <Card key={battle.id} style={styles.personRow}>
+                    <Image source={getAvatarSource(battle.opponent?.avatar_id)} style={styles.avatar} />
+                    <View style={styles.personInfo}>
+                      <Text style={styles.personName} numberOfLines={1}>
+                        {battle.opponent?.first_name || 'Someone'}
+                      </Text>
+                      <Text style={styles.personMeta}>wants to battle</Text>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={styles.acceptBtn}
+                        onPress={() => handleAccept(battle)}
+                        disabled={actioningId === battle.id}
+                      >
+                        <Text style={styles.acceptBtnText}>Accept</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.neutralBtn}
+                        onPress={() => handleDecline(battle)}
+                        disabled={actioningId === battle.id}
+                      >
+                        <Text style={styles.neutralBtnText}>Decline</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Your Battles</Text>
+              {activeBattles.length === 0 ? (
+                <Text style={styles.emptyText}>No active battles yet.</Text>
+              ) : (
+                activeBattles.map((battle) => {
+                  const myTurn = battle.turn_user === userId;
+                  return (
+                    <TouchableOpacity
+                      key={battle.id}
+                      onPress={() => navigation.navigate('Battle', { battleId: battle.id })}
+                    >
+                      <Card style={styles.personRow}>
+                        <Image source={getAvatarSource(battle.opponent?.avatar_id)} style={styles.avatar} />
                         <View style={styles.personInfo}>
                           <Text style={styles.personName} numberOfLines={1}>
                             {battle.opponent?.first_name || 'Someone'}
                           </Text>
-                          <Text style={styles.personMeta}>wants to battle</Text>
                         </View>
-                        <View style={styles.actionRow}>
-                          <TouchableOpacity
-                            style={styles.acceptBtn}
-                            onPress={() => handleAccept(battle)}
-                            disabled={actioningId === battle.id}
-                          >
-                            <Text style={styles.acceptBtnText}>Accept</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.neutralBtn}
-                            onPress={() => handleDecline(battle)}
-                            disabled={actioningId === battle.id}
-                          >
-                            <Text style={styles.neutralBtnText}>Decline</Text>
-                          </TouchableOpacity>
+                        <View style={myTurn ? styles.turnBadge : styles.neutralBadge}>
+                          <Text style={myTurn ? styles.turnBadgeText : styles.neutralBadgeText}>
+                            {myTurn ? 'Your turn' : 'Their turn'}
+                          </Text>
                         </View>
-                      </GlassCard>
-                    ))}
-                  </View>
-                )}
+                      </Card>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
 
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Your Battles</Text>
-                  {activeBattles.length === 0 ? (
-                    <Text style={styles.emptyText}>No active battles yet.</Text>
-                  ) : (
-                    activeBattles.map((battle) => {
-                      const myTurn = battle.turn_user === userId;
-                      return (
-                        <TouchableOpacity
-                          key={battle.id}
-                          onPress={() => navigation.navigate('Battle', { battleId: battle.id })}
+            {finishedBattles.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Finished</Text>
+                {finishedBattles.map((battle) => {
+                  const outcome = battle.winner_side === null
+                    ? 'tie'
+                    : battle.winner_side === battle.mySide ? 'won' : 'lost';
+                  return (
+                    <TouchableOpacity
+                      key={battle.id}
+                      onPress={() => navigation.navigate('Battle', { battleId: battle.id })}
+                    >
+                      <Card style={styles.personRow}>
+                        <Image source={getAvatarSource(battle.opponent?.avatar_id)} style={styles.avatar} />
+                        <View style={styles.personInfo}>
+                          <Text style={styles.personName} numberOfLines={1}>
+                            {battle.opponent?.first_name || 'Someone'}
+                          </Text>
+                        </View>
+                        <View
+                          style={
+                            outcome === 'won' ? styles.wonBadge
+                              : outcome === 'lost' ? styles.lostBadge : styles.neutralBadge
+                          }
                         >
-                          <GlassCard style={styles.personRow}>
-                            <Image
-                              source={getAvatarSource(battle.opponent?.avatar_id)}
-                              style={styles.personAvatar}
-                            />
-                            <View style={styles.personInfo}>
-                              <Text style={styles.personName} numberOfLines={1}>
-                                {battle.opponent?.first_name || 'Someone'}
-                              </Text>
-                            </View>
-                            <View style={myTurn ? styles.turnBadge : styles.waitingBadge}>
-                              <Text style={myTurn ? styles.turnBadgeText : styles.waitingBadgeText}>
-                                {myTurn ? 'Your turn' : "Their turn"}
-                              </Text>
-                            </View>
-                          </GlassCard>
-                        </TouchableOpacity>
-                      );
-                    })
-                  )}
-                </View>
-
-                {finishedBattles.length > 0 && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Finished</Text>
-                    {finishedBattles.map((battle) => {
-                      const outcome = battle.winner_side === null
-                        ? 'tie'
-                        : battle.winner_side === battle.mySide ? 'won' : 'lost';
-                      return (
-                        <TouchableOpacity
-                          key={battle.id}
-                          onPress={() => navigation.navigate('Battle', { battleId: battle.id })}
-                        >
-                          <GlassCard style={styles.personRow}>
-                            <Image
-                              source={getAvatarSource(battle.opponent?.avatar_id)}
-                              style={styles.personAvatar}
-                            />
-                            <View style={styles.personInfo}>
-                              <Text style={styles.personName} numberOfLines={1}>
-                                {battle.opponent?.first_name || 'Someone'}
-                              </Text>
-                            </View>
-                            <View
-                              style={
-                                outcome === 'won' ? styles.wonBadge
-                                  : outcome === 'lost' ? styles.lostBadge
-                                    : styles.tieBadge
-                              }
-                            >
-                              <Text
-                                style={
-                                  outcome === 'won' ? styles.wonBadgeText
-                                    : outcome === 'lost' ? styles.lostBadgeText
-                                      : styles.tieBadgeText
-                                }
-                              >
-                                {outcome === 'won' ? 'Won' : outcome === 'lost' ? 'Lost' : 'Tie'}
-                              </Text>
-                            </View>
-                          </GlassCard>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </>
+                          <Text
+                            style={
+                              outcome === 'won' ? styles.wonBadgeText
+                                : outcome === 'lost' ? styles.lostBadgeText : styles.neutralBadgeText
+                            }
+                          >
+                            {outcome === 'won' ? 'Won' : outcome === 'lost' ? 'Lost' : 'Tie'}
+                          </Text>
+                        </View>
+                      </Card>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             )}
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+          </>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  headerTitle: { color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
   section: { marginBottom: 24 },
-  sectionTitle: {
-    color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14, ...textShadow,
-  },
-  emptyText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
-  personRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, marginBottom: 12,
-  },
-  personAvatar: {
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: fontWeight.medium, marginBottom: 14 },
+  emptyText: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
+  personRow: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 12 },
+  avatar: {
     width: 40, height: 40, borderRadius: 20, marginRight: 12,
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    borderColor: colors.border, borderWidth: 1,
   },
   personInfo: { flex: 1, marginRight: 8 },
-  personName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  personMeta: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
+  personName: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
+  personMeta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  acceptBtn: {
-    backgroundColor: 'rgba(76,217,100,0.9)',
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
-  },
-  acceptBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  acceptBtn: { backgroundColor: colors.success, borderRadius: radius, paddingHorizontal: 12, paddingVertical: 7 },
+  acceptBtnText: { color: colors.onGradient, fontSize: 12, fontWeight: fontWeight.medium },
   neutralBtn: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 12, paddingVertical: 7,
   },
-  neutralBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  turnBadge: {
-    backgroundColor: 'rgba(255,196,0,0.9)',
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+  neutralBtnText: { color: colors.text, fontSize: 12, fontWeight: fontWeight.medium },
+  neutralBadge: {
+    backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 10, paddingVertical: 6,
   },
-  turnBadgeText: { color: '#1a1a1a', fontSize: 11, fontWeight: '700' },
-  waitingBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
-  },
-  waitingBadgeText: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '700' },
-  wonBadge: {
-    backgroundColor: 'rgba(76,217,100,0.9)',
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
-  },
-  wonBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  neutralBadgeText: { color: colors.textMuted, fontSize: 11, fontWeight: fontWeight.medium },
+  turnBadge: { backgroundColor: colors.accentCoral, borderRadius: radius, paddingHorizontal: 10, paddingVertical: 6 },
+  turnBadgeText: { color: colors.onGradient, fontSize: 11, fontWeight: fontWeight.medium },
+  wonBadge: { backgroundColor: colors.success, borderRadius: radius, paddingHorizontal: 10, paddingVertical: 6 },
+  wonBadgeText: { color: colors.onGradient, fontSize: 11, fontWeight: fontWeight.medium },
   lostBadge: {
-    backgroundColor: 'rgba(255,90,90,0.2)',
-    borderColor: 'rgba(255,90,90,0.6)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: colors.dangerTint, borderColor: colors.danger, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 10, paddingVertical: 6,
   },
-  lostBadgeText: { color: '#ff8080', fontSize: 11, fontWeight: '700' },
-  tieBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
-  },
-  tieBadgeText: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700' },
+  lostBadgeText: { color: colors.danger, fontSize: 11, fontWeight: fontWeight.medium },
 });

@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ActivityIndicator,
-  StyleSheet, ImageBackground, ScrollView,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
-import BACKGROUNDS from '../lib/backgrounds';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
+import SolidButton from '../components/SolidButton';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import { updateOnboarding, resolveAuthedRoute } from '../lib/profiles';
 import { estimateWeeks, suggestNextTier } from '../lib/onboarding';
 import { generateLearningPlan } from '../lib/learningPlan';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 const LEVEL_LABELS = {
   beginner: 'Complete beginner',
@@ -32,6 +36,7 @@ const formatDate = (dateString) => new Date(`${dateString}T00:00:00`).toLocaleDa
 });
 
 export default function OnboardingSummaryScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { levelEstimate, goal, goalDate, dailyMinutes } = useOnboarding();
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -39,8 +44,6 @@ export default function OnboardingSummaryScreen({ navigation }) {
 
   const weeks = estimateWeeks(levelEstimate, dailyMinutes);
 
-  // Tight-timeline note: only for a dated trip whose date arrives before the
-  // estimate says they'd reach conversational comfort.
   let tightNote = null;
   if (goal === 'trip' && goalDate && weeks != null) {
     const estimateDate = new Date();
@@ -74,138 +77,129 @@ export default function OnboardingSummaryScreen({ navigation }) {
       return;
     }
 
-    // Kick off plan generation with its own visible state (the Gemini call
-    // takes several seconds — make it feel intentional). Success or failure,
-    // we still proceed: they're onboarded, and Home has a fallback to
-    // generate the plan if this didn't land.
     setGenerating(true);
     const { error: planError } = await generateLearningPlan();
     if (planError) console.log('Plan generation failed (Home fallback will offer it):', planError);
 
-    // Leave the onboarding subtree entirely (reset, so Back can't return
-    // here) via the root navigator.
     const nextRoute = resolveAuthedRoute(data);
     const rootNav = navigation.getParent() || navigation;
     rootNav.reset({ index: 0, routes: [{ name: nextRoute }] });
   };
 
   return (
-    <ImageBackground source={BACKGROUNDS.languageSelect} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.title}>Here's your plan</Text>
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.lg }]}
+      >
+        <Text style={styles.title}>Here&apos;s your plan</Text>
+      </LinearGradient>
 
-            <GlassCard style={styles.recapCard}>
-              <View style={styles.recapRow}>
-                <Text style={styles.recapLabel}>Your level</Text>
-                <Text style={styles.recapValue}>{LEVEL_LABELS[levelEstimate] || '—'}</Text>
-              </View>
-              <View style={[styles.recapRow, styles.recapRowDivider]}>
-                <Text style={styles.recapLabel}>Learning for</Text>
-                <Text style={styles.recapValue} numberOfLines={1}>{goalLabel(goal)}</Text>
-              </View>
-              {goal === 'trip' && goalDate && (
-                <View style={[styles.recapRow, styles.recapRowDivider]}>
-                  <Text style={styles.recapLabel}>Trip date</Text>
-                  <Text style={styles.recapValue}>{formatDate(goalDate)}</Text>
-                </View>
-              )}
-              <View style={[styles.recapRow, styles.recapRowDivider]}>
-                <Text style={styles.recapLabel}>Daily practice</Text>
-                <Text style={styles.recapValue}>{dailyMinutes === 20 ? '20+ min' : `${dailyMinutes} min`}</Text>
-              </View>
-            </GlassCard>
-
-            {weeks != null && (
-              <GlassCard style={styles.estimateCard}>
-                <Text style={styles.estimateEmoji}>🎯</Text>
-                <Text style={styles.estimateText}>
-                  At {dailyMinutes === 20 ? '20+' : dailyMinutes} min/day from your current level,
-                  expect to reach basic conversational comfort in ~{weeks} weeks.
-                </Text>
-              </GlassCard>
-            )}
-
-            {tightNote && (
-              <GlassCard
-                style={styles.noteCard}
-                overlayColor="rgba(255,196,0,0.18)"
-                borderColor="rgba(255,196,0,0.6)"
-              >
-                <Text style={styles.noteText}>⏳ {tightNote}</Text>
-              </GlassCard>
-            )}
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          </ScrollView>
-
-          {generating ? (
-            <View style={styles.generatingRow}>
-              <ActivityIndicator color="#fff" />
-              <Text style={styles.generatingText}>Building your personalized plan…</Text>
-            </View>
-          ) : (
-            <View style={styles.footer}>
-              <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} disabled={saving}>
-                <Text style={styles.backBtnText}>Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.nextBtn} onPress={handleFinish} disabled={saving}>
-                {saving ? (
-                  <ActivityIndicator color="#1a1a1a" />
-                ) : (
-                  <Text style={styles.nextBtnText}>Looks good, let's go!</Text>
-                )}
-              </TouchableOpacity>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <Card style={styles.recapCard}>
+          <View style={styles.recapRow}>
+            <Text style={styles.recapLabel}>Your level</Text>
+            <Text style={styles.recapValue}>{LEVEL_LABELS[levelEstimate] || '—'}</Text>
+          </View>
+          <View style={[styles.recapRow, styles.recapRowDivider]}>
+            <Text style={styles.recapLabel}>Learning for</Text>
+            <Text style={styles.recapValue} numberOfLines={1}>{goalLabel(goal)}</Text>
+          </View>
+          {goal === 'trip' && goalDate && (
+            <View style={[styles.recapRow, styles.recapRowDivider]}>
+              <Text style={styles.recapLabel}>Trip date</Text>
+              <Text style={styles.recapValue}>{formatDate(goalDate)}</Text>
             </View>
           )}
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+          <View style={[styles.recapRow, styles.recapRowDivider]}>
+            <Text style={styles.recapLabel}>Daily practice</Text>
+            <Text style={styles.recapValue}>{dailyMinutes === 20 ? '20+ min' : `${dailyMinutes} min`}</Text>
+          </View>
+        </Card>
+
+        {weeks != null && (
+          <Card style={styles.estimateCard}>
+            <Ionicons name="flag-outline" size={32} color={colors.accentCoral} style={styles.estimateIcon} />
+            <Text style={styles.estimateText}>
+              At {dailyMinutes === 20 ? '20+' : dailyMinutes} min/day from your current level,
+              expect to reach basic conversational comfort in ~{weeks} weeks.
+            </Text>
+          </Card>
+        )}
+
+        {tightNote && (
+          <Card style={styles.noteCard}>
+            <View style={styles.noteRow}>
+              <Ionicons name="hourglass-outline" size={16} color={colors.accentCoral} style={styles.noteIcon} />
+              <Text style={styles.noteText}>{tightNote}</Text>
+            </View>
+          </Card>
+        )}
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      </ScrollView>
+
+      {generating ? (
+        <View style={[styles.generatingRow, { paddingBottom: insets.bottom + spacing.lg }]}>
+          <ActivityIndicator color={colors.accentCoral} />
+          <Text style={styles.generatingText}>Building your personalized plan…</Text>
+        </View>
+      ) : (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <SolidButton
+            label="Back"
+            variant="secondary"
+            onPress={() => navigation.goBack()}
+            disabled={saving}
+            style={styles.backBtn}
+          />
+          <SolidButton
+            label={saving ? '' : "Looks good, let's go!"}
+            onPress={handleFinish}
+            disabled={saving}
+            style={styles.nextBtn}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.xl,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
+  },
+  title: { fontSize: 26, fontWeight: fontWeight.medium, color: colors.onGradient },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
-  title: {
-    fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 24, ...textShadow,
-  },
-  recapCard: { padding: 18, marginBottom: 16 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.md },
+  recapCard: { marginBottom: 16 },
   recapRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12,
   },
-  recapRowDivider: { borderTopColor: 'rgba(255,255,255,0.15)', borderTopWidth: 1 },
-  recapLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' },
-  recapValue: { color: '#fff', fontSize: 15, fontWeight: '700', flexShrink: 1, marginLeft: 12, textAlign: 'right' },
-  estimateCard: { padding: 20, marginBottom: 16, alignItems: 'center' },
-  estimateEmoji: { fontSize: 32, marginBottom: 10 },
-  estimateText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
-  noteCard: { padding: 16, marginBottom: 16 },
-  noteText: { color: '#fff', fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  errorText: { color: '#ffb4b4', fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  recapRowDivider: { borderTopColor: colors.border, borderTopWidth: 1 },
+  recapLabel: { color: colors.textMuted, fontSize: 14, fontWeight: fontWeight.medium },
+  recapValue: {
+    color: colors.text, fontSize: 15, fontWeight: fontWeight.medium, flexShrink: 1, marginLeft: 12, textAlign: 'right',
+  },
+  estimateCard: { alignItems: 'center', paddingVertical: 20, marginBottom: 16 },
+  estimateIcon: { marginBottom: 10 },
+  estimateText: { color: colors.text, fontSize: 16, fontWeight: fontWeight.regular, textAlign: 'center', lineHeight: 23 },
+  noteCard: { marginBottom: 16, backgroundColor: colors.accentCoralTint, borderColor: colors.accentCoral, borderWidth: 0.5 },
+  noteRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  noteIcon: { marginRight: 8, marginTop: 1 },
+  noteText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: fontWeight.regular, lineHeight: 20 },
+  errorText: { color: colors.danger, fontSize: 14, fontWeight: fontWeight.medium, textAlign: 'center' },
   generatingRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
-    paddingHorizontal: 24, paddingTop: 8, paddingBottom: 20,
+    paddingHorizontal: spacing.xl, paddingTop: spacing.sm,
   },
-  generatingText: { color: '#fff', fontSize: 15, fontWeight: '600', ...textShadow },
-  footer: {
-    flexDirection: 'row', gap: 12,
-    paddingHorizontal: 24, paddingTop: 8, paddingBottom: 16,
-  },
-  backBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 14, paddingVertical: 16, paddingHorizontal: 24, alignItems: 'center',
-  },
-  backBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  nextBtn: {
-    flex: 1, backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, padding: 16, alignItems: 'center',
-  },
-  nextBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 16 },
+  generatingText: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
+  footer: { flexDirection: 'row', gap: 12, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
+  backBtn: { paddingHorizontal: 24 },
+  nextBtn: { flex: 1 },
 });

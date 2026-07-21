@@ -1,31 +1,32 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Image,
-  StyleSheet, ImageBackground, FlatList, ActivityIndicator, Alert,
+  StyleSheet, FlatList, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
-import { getLanguage } from '../content';
 import { getAvatarSource } from '../lib/avatars';
 import { fetchPublicProfiles, fetchFriendshipBetween, deleteFriendship, blockUser } from '../lib/friends';
-import { textShadow } from '../components/GlassCard';
 import {
   fetchRecentMessages, fetchOlderMessages, sendMessage, softDeleteMessage,
   reportMessage, fetchMyBlockedIds, subscribeToGroupMessages, unsubscribeFromGroupMessages,
   MESSAGE_PAGE_SIZE,
 } from '../lib/chat';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 const REPORT_REASONS = ['Spam', 'Harassment', 'Inappropriate content', 'Other'];
 
 const formatTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 export default function GroupChatScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { groupId, groupName, isOwner } = route.params;
-  const language = getLanguage();
-  const backgrounds = getBackgrounds(language.code);
 
   const [userId, setUserId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -259,144 +260,137 @@ export default function GroupChatScreen({ route, navigation }) {
           {!isMine && (
             <Text style={styles.senderName} numberOfLines={1}>{profile?.first_name || 'Someone'}</Text>
           )}
-          <Text style={styles.messageBody}>{item.body}</Text>
-          <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
+          <Text style={[styles.messageBody, isMine ? styles.textOnCoral : styles.textDark]}>{item.body}</Text>
+          <Text style={[styles.messageTime, isMine ? styles.timeOnCoral : styles.timeMuted]}>
+            {formatTime(item.created_at)}
+          </Text>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <ImageBackground source={backgrounds.home} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.backBtnText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle} numberOfLines={1}>{groupName || 'Chat'}</Text>
-          </View>
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        <TouchableOpacity style={styles.glassBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>{groupName || 'Chat'}</Text>
+      </LinearGradient>
 
-          <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.accentCoral} style={styles.loadingIndicator} />
+        ) : (
+          <FlatList
+            data={visibleMessages}
+            inverted
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessage}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            ListFooterComponent={
+              loadingEarlier ? (
+                <ActivityIndicator color={colors.accentCoral} style={styles.loadEarlierIndicator} />
+              ) : hasMore ? (
+                <TouchableOpacity style={styles.loadEarlierBtn} onPress={handleLoadEarlier}>
+                  <Text style={styles.loadEarlierText}>Load earlier messages</Text>
+                </TouchableOpacity>
+              ) : null
+            }
+            ListEmptyComponent={<Text style={styles.emptyText}>No messages yet — say hi!</Text>}
+          />
+        )}
+
+        <View style={[styles.composerRow, { paddingBottom: insets.bottom + spacing.md }]}>
+          <TextInput
+            style={styles.composerInput}
+            placeholder="Message..."
+            placeholderTextColor={colors.textMuted}
+            value={composerText}
+            onChangeText={setComposerText}
+            multiline
+            maxLength={2000}
+            editable={!sending}
+          />
+          <TouchableOpacity
+            style={styles.sendBtn}
+            onPress={handleSend}
+            disabled={sending || !composerText.trim()}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" style={styles.loadingIndicator} />
+            {sending ? (
+              <ActivityIndicator color={colors.onGradient} />
             ) : (
-              <FlatList
-                data={visibleMessages}
-                inverted
-                keyExtractor={(item) => item.id}
-                renderItem={renderMessage}
-                style={styles.list}
-                contentContainerStyle={styles.listContent}
-                ListFooterComponent={
-                  loadingEarlier ? (
-                    <ActivityIndicator color="#fff" style={styles.loadEarlierIndicator} />
-                  ) : hasMore ? (
-                    <TouchableOpacity style={styles.loadEarlierBtn} onPress={handleLoadEarlier}>
-                      <Text style={styles.loadEarlierText}>Load earlier messages</Text>
-                    </TouchableOpacity>
-                  ) : null
-                }
-                ListEmptyComponent={<Text style={styles.emptyText}>No messages yet — say hi!</Text>}
-              />
+              <Text style={styles.sendBtnText}>Send</Text>
             )}
-
-            <View style={styles.composerRow}>
-              <TextInput
-                style={styles.composerInput}
-                placeholder="Message..."
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                value={composerText}
-                onChangeText={setComposerText}
-                multiline
-                maxLength={2000}
-                editable={!sending}
-              />
-              <TouchableOpacity
-                style={styles.sendBtn}
-                onPress={handleSend}
-                disabled={sending || !composerText.trim()}
-              >
-                {sending ? (
-                  <ActivityIndicator color="#1a1a1a" />
-                ) : (
-                  <Text style={styles.sendBtnText}>Send</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  backBtn: {
+  glassBtn: {
     width: 32, height: 32, borderRadius: 16, marginRight: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.glassFill, borderColor: colors.glassBorder, borderWidth: 0.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  headerTitle: { flex: 1, color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium },
   loadingIndicator: { flex: 1 },
   list: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingTop: 12, flexGrow: 1 },
-  emptyText: {
-    color: 'rgba(255,255,255,0.85)', fontSize: 14, textAlign: 'center',
-    marginTop: 24,
-  },
+  emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center', marginTop: 24 },
   loadEarlierIndicator: { marginVertical: 12 },
   loadEarlierBtn: { alignItems: 'center', paddingVertical: 12 },
-  loadEarlierText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600' },
-  messageRow: {
-    flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12,
-  },
+  loadEarlierText: { color: colors.accentCoral, fontSize: 13, fontWeight: fontWeight.medium },
+  messageRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12 },
   messageRowMine: { justifyContent: 'flex-end' },
   messageRowTheirs: { justifyContent: 'flex-start' },
   messageAvatar: {
     width: 28, height: 28, borderRadius: 14, marginRight: 8,
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    borderColor: colors.border, borderWidth: 1,
   },
   bubble: {
-    maxWidth: '75%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10,
+    maxWidth: '75%', borderRadius: radius, paddingHorizontal: 14, paddingVertical: 10,
   },
-  bubbleMine: {
-    backgroundColor: 'rgba(255,255,255,0.28)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-  },
-  bubbleTheirs: {
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1,
-  },
-  senderName: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '700', marginBottom: 2 },
-  messageBody: { color: '#fff', fontSize: 15, lineHeight: 20 },
-  messageTime: { color: 'rgba(255,255,255,0.6)', fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
+  bubbleMine: { backgroundColor: colors.accentCoral },
+  bubbleTheirs: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth },
+  senderName: { color: colors.textMuted, fontSize: 11, fontWeight: fontWeight.medium, marginBottom: 2 },
+  messageBody: { fontSize: 15, lineHeight: 20 },
+  textOnCoral: { color: colors.onGradient },
+  textDark: { color: colors.text },
+  messageTime: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
+  timeOnCoral: { color: 'rgba(255,255,255,0.8)' },
+  timeMuted: { color: colors.textMuted },
   composerRow: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 10,
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12,
+    paddingHorizontal: 16, paddingTop: 10,
   },
   composerInput: {
     flex: 1, maxHeight: 100, minHeight: 44,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10,
-    color: '#fff', fontSize: 15,
+    backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 14, paddingVertical: 10, color: colors.text, fontSize: 15,
   },
   sendBtn: {
-    height: 44, backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 18, paddingHorizontal: 18,
-    alignItems: 'center', justifyContent: 'center',
+    height: 44, backgroundColor: colors.accentCoral,
+    borderRadius: radius, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center',
   },
-  sendBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 14 },
+  sendBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 14 },
 });

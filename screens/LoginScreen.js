@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Alert,
-  StyleSheet, ImageBackground, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
-import BACKGROUNDS from '../lib/backgrounds';
-import { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
 import AvatarPicker from '../components/AvatarPicker';
 import UsernameField from '../components/UsernameField';
 import { createProfile } from '../lib/profiles';
 import { signInWithApple, signInWithGoogle, isAppleAuthAvailable } from '../lib/auth';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 const SOCIAL_ERROR_MESSAGES = {
   duplicate: 'An account with this email already exists — try signing in with your password.',
@@ -39,7 +42,6 @@ export default function LoginScreen() {
     isAppleAuthAvailable().then(setAppleAvailable);
   }, []);
 
-  // On success App.js handles routing via onAuthStateChange; cancel is silent.
   const handleSocial = async (provider) => {
     if (socialLoading) return;
     setError('');
@@ -99,9 +101,6 @@ export default function LoginScreen() {
         avatarId,
         username: username.trim(),
       });
-      // A lost username race here is recoverable: the account exists, the
-      // profile doesn't — the ChooseUsername/complete-profile flow picks
-      // it up on next launch.
       if (usernameTaken) console.log('Username taken during signup race');
       else if (profileError) console.log('Error creating profile:', profileError);
     }
@@ -125,23 +124,22 @@ export default function LoginScreen() {
   };
 
   return (
-    <ImageBackground
-      source={BACKGROUNDS.login}
-      style={styles.background}
+    <LinearGradient
+      colors={gradient.colors}
+      locations={gradient.locations}
+      start={gradient.start}
+      end={gradient.end}
+      style={styles.screen}
     >
-      <View style={styles.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.container}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Logo */}
-            <Text style={styles.logo}>JaKomo</Text>
-            <Text style={styles.tagline}>Learn What You Need Fast!- ¡órale!</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.flex}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.logo}>JaKomo</Text>
+          <Text style={styles.tagline}>Learn What You Need Fast!- ¡órale!</Text>
 
+          <Card style={styles.formCard}>
             {/* Social sign-in — iOS only (provided credentials cover iOS + web) */}
             {Platform.OS === 'ios' && (
               <>
@@ -185,7 +183,7 @@ export default function LoginScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder="First name"
-                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  placeholderTextColor={colors.textMuted}
                   value={firstName}
                   onChangeText={setFirstName}
                   editable={!loading}
@@ -203,11 +201,10 @@ export default function LoginScreen() {
               </>
             )}
 
-            {/* Inputs */}
             <TextInput
               style={styles.input}
               placeholder="Email"
-              placeholderTextColor="rgba(255,255,255,0.7)"
+              placeholderTextColor={colors.textMuted}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -217,25 +214,23 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="Password"
-              placeholderTextColor="rgba(255,255,255,0.7)"
+              placeholderTextColor={colors.textMuted}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               editable={!loading}
             />
 
-            {/* Error / info message */}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             {info ? <Text style={styles.infoText}>{info}</Text> : null}
 
-            {/* Frosted glass primary button */}
             <TouchableOpacity
               style={styles.primaryBtn}
               onPress={mode === 'login' ? handleLogin : handleSignUp}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#1a1a1a" />
+                <ActivityIndicator color={colors.onGradient} />
               ) : (
                 <Text style={styles.primaryBtnText}>
                   {mode === 'login' ? 'Log in' : 'Create account'}
@@ -243,7 +238,6 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Secondary button */}
             <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={mode === 'login' ? switchToSignup : switchToLogin}
@@ -253,70 +247,57 @@ export default function LoginScreen() {
                 {mode === 'login' ? 'Create account' : 'Log in instead'}
               </Text>
             </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-    </ImageBackground>
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1 },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: spacing.xl, paddingVertical: 32 },
+  logo: {
+    fontSize: 48, fontWeight: fontWeight.medium, color: colors.onGradient,
+    textAlign: 'center', letterSpacing: 1,
+  },
+  tagline: { color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 32, fontSize: 15 },
+  formCard: {},
   // Apple HIG: black fill, white logo+text.
   appleBtn: {
     backgroundColor: '#000',
-    borderRadius: 14, padding: 15, alignItems: 'center', justifyContent: 'center',
+    borderRadius: radius, padding: 15, alignItems: 'center', justifyContent: 'center',
     marginBottom: 12, minHeight: 52,
   },
-  appleBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  // Google branding: white fill, dark text, colored G.
+  appleBtnText: { color: '#fff', fontSize: 16, fontWeight: fontWeight.medium },
+  // Google branding: white fill, dark text, colored G — bordered so it reads on the white card.
   googleBtn: {
     backgroundColor: '#fff',
-    borderRadius: 14, padding: 15, alignItems: 'center', justifyContent: 'center',
+    borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, padding: 15, alignItems: 'center', justifyContent: 'center',
     marginBottom: 12, minHeight: 52,
   },
-  googleBtnText: { color: '#1a1a1a', fontSize: 16, fontWeight: '600' },
-  googleG: { color: '#4285F4', fontSize: 18, fontWeight: '800' },
+  googleBtnText: { color: '#1a1a1a', fontSize: 16, fontWeight: fontWeight.medium },
+  googleG: { color: '#4285F4', fontSize: 18, fontWeight: fontWeight.medium },
   socialBtnDisabled: { opacity: 0.6 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 14 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.3)' },
-  dividerText: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', marginHorizontal: 12 },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 24 },
-  logo: {
-    fontSize: 48, fontWeight: '800', color: '#fff',
-    textAlign: 'center', letterSpacing: 1, ...textShadow,
-  },
-  tagline: {
-    color: 'rgba(255,255,255,0.9)', textAlign: 'center',
-    marginBottom: 36, fontSize: 15,
-  },
-  sectionLabel: {
-    color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 12,
-  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.textMuted, fontSize: 13, fontWeight: fontWeight.medium, marginHorizontal: 12 },
+  sectionLabel: { color: colors.text, fontSize: 14, fontWeight: fontWeight.medium, marginBottom: 12 },
   avatarPickerWrap: { marginBottom: 14 },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, padding: 15, color: '#fff',
-    marginBottom: 14, fontSize: 16,
+    backgroundColor: colors.bg,
+    borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, padding: 15, color: colors.text, marginBottom: 14, fontSize: 16,
   },
-  errorText: {
-    color: '#ffb4b4', textAlign: 'center', marginBottom: 14, fontSize: 14, fontWeight: '600',
-  },
-  infoText: {
-    color: '#fff', textAlign: 'center', marginBottom: 14, fontSize: 14, fontWeight: '600',
-  },
+  errorText: { color: colors.danger, textAlign: 'center', marginBottom: 14, fontSize: 14, fontWeight: fontWeight.medium },
+  infoText: { color: colors.text, textAlign: 'center', marginBottom: 14, fontSize: 14, fontWeight: fontWeight.medium },
   primaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8,
+    backgroundColor: colors.accentCoral,
+    borderRadius: radius, padding: 16, alignItems: 'center', marginTop: 4,
   },
-  primaryBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 16 },
-  secondaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 12,
-  },
-  secondaryBtnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  primaryBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 16 },
+  secondaryBtn: { padding: 14, alignItems: 'center', marginTop: 6 },
+  secondaryBtnText: { color: colors.accentCoral, fontWeight: fontWeight.medium, fontSize: 15 },
 });

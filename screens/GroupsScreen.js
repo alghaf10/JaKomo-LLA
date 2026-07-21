@@ -1,21 +1,26 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator,
+  StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile } from '../lib/profiles';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
 import {
   createGroup, fetchMyGroups, searchPublicGroups,
   findGroupByCode, fetchMembership, joinGroup,
 } from '../lib/groups';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 export default function GroupsScreen({ navigation, headerContent }) {
+  const insets = useSafeAreaInsets();
   const [userId, setUserId] = useState(null);
   const [language, setLanguage] = useState(getLanguage());
   const [loading, setLoading] = useState(true);
@@ -37,8 +42,6 @@ export default function GroupsScreen({ navigation, headerContent }) {
   const [findSearching, setFindSearching] = useState(false);
   const [findError, setFindError] = useState('');
   const [findResults, setFindResults] = useState([]);
-
-  const backgrounds = getBackgrounds(language.code);
 
   const loadGroupsData = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -192,282 +195,264 @@ export default function GroupsScreen({ navigation, headerContent }) {
   };
 
   return (
-    <ImageBackground source={backgrounds.home} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            {headerContent || (
-              <>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                  <Text style={styles.backBtnText}>←</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Groups</Text>
-              </>
-            )}
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        {headerContent || (
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.glassBtn} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Groups</Text>
           </View>
+        )}
+      </LinearGradient>
 
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {/* My Groups */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>My Groups</Text>
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : myGroups.length === 0 ? (
-                <Text style={styles.emptyText}>You're not in any groups yet.</Text>
-              ) : (
-                myGroups.map((group) => (
-                  <TouchableOpacity
-                    key={group.id}
-                    onPress={() => navigation.navigate('GroupDetail', { groupId: group.id })}
-                  >
-                    <GlassCard style={styles.groupRow}>
-                      <View style={styles.groupInfo}>
-                        <Text style={styles.groupName} numberOfLines={1}>{group.name}</Text>
-                        {group.memberCount != null && (
-                          <Text style={styles.groupMeta}>
-                            {group.memberCount} member{group.memberCount === 1 ? '' : 's'}
-                          </Text>
-                        )}
-                      </View>
-                      {group.owner_id === userId && (
-                        <View style={styles.ownerBadge}>
-                          <Text style={styles.ownerBadgeText}>Owner</Text>
-                        </View>
-                      )}
-                    </GlassCard>
-                  </TouchableOpacity>
-                ))
-              )}
-            </View>
-
-            {/* Create a group */}
-            <GlassCard style={styles.card}>
-              <Text style={styles.cardLabel}>Create a group</Text>
-              <TextInput
-                style={styles.nameInput}
-                placeholder="Group name"
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                value={newGroupName}
-                onChangeText={setNewGroupName}
-                editable={!creatingGroup}
-              />
-              <View style={styles.toggleRow}>
-                <TouchableOpacity
-                  style={[styles.toggleBtn, newGroupIsPublic && styles.toggleBtnActive]}
-                  onPress={() => setNewGroupIsPublic(true)}
-                >
-                  <Text style={[styles.toggleBtnText, newGroupIsPublic && styles.toggleBtnTextActive]}>
-                    Public
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleBtn, !newGroupIsPublic && styles.toggleBtnActive]}
-                  onPress={() => setNewGroupIsPublic(false)}
-                >
-                  <Text style={[styles.toggleBtnText, !newGroupIsPublic && styles.toggleBtnTextActive]}>
-                    Private
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.friendHintText}>
-                {newGroupIsPublic
-                  ? 'Public groups can be found in search and joined by code.'
-                  : 'Private groups are joinable by code only.'}
-              </Text>
-              {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* My Groups */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>My Groups</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.accentCoral} />
+          ) : myGroups.length === 0 ? (
+            <Text style={styles.emptyText}>You&apos;re not in any groups yet.</Text>
+          ) : (
+            myGroups.map((group) => (
               <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={handleCreateGroup}
-                disabled={creatingGroup}
+                key={group.id}
+                onPress={() => navigation.navigate('GroupDetail', { groupId: group.id })}
               >
-                {creatingGroup ? (
-                  <ActivityIndicator color="#1a1a1a" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Create</Text>
-                )}
-              </TouchableOpacity>
-            </GlassCard>
-
-            {/* Join a group */}
-            <GlassCard style={styles.card}>
-              <Text style={styles.cardLabel}>Join a group</Text>
-              <View style={styles.searchRow}>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="GP-XXXXX"
-                  placeholderTextColor="rgba(255,255,255,0.6)"
-                  value={joinCodeInput}
-                  onChangeText={setJoinCodeInput}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  editable={!joiningLookup}
-                />
-                <TouchableOpacity style={styles.searchBtn} onPress={handleJoinLookup} disabled={joiningLookup}>
-                  {joiningLookup ? (
-                    <ActivityIndicator color="#1a1a1a" />
-                  ) : (
-                    <Text style={styles.searchBtnText}>Search</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
-
-              {joinMatch && (
-                <View style={styles.matchRow}>
-                  <Text style={styles.matchName} numberOfLines={1}>{joinMatch.name}</Text>
-                  <TouchableOpacity
-                    style={styles.sendBtn}
-                    onPress={handleConfirmJoin}
-                    disabled={confirmingJoin}
-                  >
-                    {confirmingJoin ? (
-                      <ActivityIndicator color="#1a1a1a" />
-                    ) : (
-                      <Text style={styles.sendBtnText}>Join</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
-            </GlassCard>
-
-            {/* Find groups */}
-            <GlassCard style={styles.card}>
-              <Text style={styles.cardLabel}>Find groups</Text>
-              <View style={styles.searchRow}>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search by name"
-                  placeholderTextColor="rgba(255,255,255,0.6)"
-                  value={findQuery}
-                  onChangeText={setFindQuery}
-                  autoCorrect={false}
-                  editable={!findSearching}
-                />
-                <TouchableOpacity style={styles.searchBtn} onPress={handleFindSearch} disabled={findSearching}>
-                  {findSearching ? (
-                    <ActivityIndicator color="#1a1a1a" />
-                  ) : (
-                    <Text style={styles.searchBtnText}>Search</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {findError ? <Text style={styles.errorText}>{findError}</Text> : null}
-
-              {findResults.map((group) => (
-                <View key={group.id} style={styles.groupRow}>
+                <Card style={styles.groupRow}>
                   <View style={styles.groupInfo}>
                     <Text style={styles.groupName} numberOfLines={1}>{group.name}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.sendBtn}
-                    onPress={() => handleJoinFromSearch(group)}
-                    disabled={actioningId === group.id}
-                  >
-                    {actioningId === group.id ? (
-                      <ActivityIndicator color="#1a1a1a" />
-                    ) : (
-                      <Text style={styles.sendBtnText}>Join</Text>
+                    {group.memberCount != null && (
+                      <Text style={styles.groupMeta}>
+                        {group.memberCount} member{group.memberCount === 1 ? '' : 's'}
+                      </Text>
                     )}
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </GlassCard>
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+                  </View>
+                  {group.owner_id === userId && (
+                    <View style={styles.ownerBadge}>
+                      <Text style={styles.ownerBadgeText}>Owner</Text>
+                    </View>
+                  )}
+                </Card>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
+        {/* Create a group */}
+        <Card style={styles.card}>
+          <Text style={styles.cardLabel}>Create a group</Text>
+          <TextInput
+            style={styles.nameInput}
+            placeholder="Group name"
+            placeholderTextColor={colors.textMuted}
+            value={newGroupName}
+            onChangeText={setNewGroupName}
+            editable={!creatingGroup}
+          />
+          <View style={styles.toggleRow}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, newGroupIsPublic && styles.toggleBtnActive]}
+              onPress={() => setNewGroupIsPublic(true)}
+            >
+              <Text style={[styles.toggleBtnText, newGroupIsPublic && styles.toggleBtnTextActive]}>
+                Public
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleBtn, !newGroupIsPublic && styles.toggleBtnActive]}
+              onPress={() => setNewGroupIsPublic(false)}
+            >
+              <Text style={[styles.toggleBtnText, !newGroupIsPublic && styles.toggleBtnTextActive]}>
+                Private
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.hintText}>
+            {newGroupIsPublic
+              ? 'Public groups can be found in search and joined by code.'
+              : 'Private groups are joinable by code only.'}
+          </Text>
+          {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateGroup} disabled={creatingGroup}>
+            {creatingGroup ? (
+              <ActivityIndicator color={colors.onGradient} />
+            ) : (
+              <Text style={styles.primaryBtnText}>Create</Text>
+            )}
+          </TouchableOpacity>
+        </Card>
+
+        {/* Join a group */}
+        <Card style={styles.card}>
+          <Text style={styles.cardLabel}>Join a group</Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="GP-XXXXX"
+              placeholderTextColor={colors.textMuted}
+              value={joinCodeInput}
+              onChangeText={setJoinCodeInput}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!joiningLookup}
+            />
+            <TouchableOpacity style={styles.searchBtn} onPress={handleJoinLookup} disabled={joiningLookup}>
+              {joiningLookup ? (
+                <ActivityIndicator color={colors.onGradient} />
+              ) : (
+                <Text style={styles.searchBtnText}>Search</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+
+          {joinMatch && (
+            <View style={styles.matchRow}>
+              <Text style={styles.matchName} numberOfLines={1}>{joinMatch.name}</Text>
+              <TouchableOpacity style={styles.sendBtn} onPress={handleConfirmJoin} disabled={confirmingJoin}>
+                {confirmingJoin ? (
+                  <ActivityIndicator color={colors.onGradient} />
+                ) : (
+                  <Text style={styles.sendBtnText}>Join</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </Card>
+
+        {/* Find groups */}
+        <Card style={styles.card}>
+          <Text style={styles.cardLabel}>Find groups</Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name"
+              placeholderTextColor={colors.textMuted}
+              value={findQuery}
+              onChangeText={setFindQuery}
+              autoCorrect={false}
+              editable={!findSearching}
+            />
+            <TouchableOpacity style={styles.searchBtn} onPress={handleFindSearch} disabled={findSearching}>
+              {findSearching ? (
+                <ActivityIndicator color={colors.onGradient} />
+              ) : (
+                <Text style={styles.searchBtnText}>Search</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {findError ? <Text style={styles.errorText}>{findError}</Text> : null}
+
+          {findResults.map((group, index) => (
+            <View key={group.id} style={[styles.resultRow, index > 0 && styles.resultRowDivider]}>
+              <View style={styles.groupInfo}>
+                <Text style={styles.groupName} numberOfLines={1}>{group.name}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.sendBtn}
+                onPress={() => handleJoinFromSearch(group)}
+                disabled={actioningId === group.id}
+              >
+                {actioningId === group.id ? (
+                  <ActivityIndicator color={colors.onGradient} />
+                ) : (
+                  <Text style={styles.sendBtnText}>Join</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ))}
+        </Card>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  backBtn: {
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
+  glassBtn: {
     width: 32, height: 32, borderRadius: 16, marginRight: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.glassFill, borderColor: colors.glassBorder, borderWidth: 0.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  headerTitle: { color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
   section: { marginBottom: 24 },
-  sectionTitle: {
-    color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14, ...textShadow,
-  },
-  emptyText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
-  groupRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, marginBottom: 12,
-  },
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: fontWeight.medium, marginBottom: 14 },
+  emptyText: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
+  groupRow: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 12 },
   groupInfo: { flex: 1, marginRight: 8 },
-  groupName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  groupMeta: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
+  groupName: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
+  groupMeta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   ownerBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 10, paddingVertical: 5,
   },
-  ownerBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  card: {
-    padding: 18, marginBottom: 16,
-  },
+  ownerBadgeText: { color: colors.accentCoral, fontSize: 11, fontWeight: fontWeight.medium },
+  card: { marginBottom: spacing.lg },
   cardLabel: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700',
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
   },
   nameInput: {
     height: 48,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, paddingHorizontal: 14, color: '#fff', fontSize: 15,
-    marginBottom: 12,
+    backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 14, color: colors.text, fontSize: 15, marginBottom: 12,
   },
   toggleRow: {
-    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 14, padding: 4, marginBottom: 10,
+    flexDirection: 'row', backgroundColor: colors.bg,
+    borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, padding: 4, marginBottom: 10,
   },
-  toggleBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-  },
-  toggleBtnActive: { backgroundColor: 'rgba(255,255,255,0.9)' },
-  toggleBtnText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '700' },
-  toggleBtnTextActive: { color: '#1a1a1a' },
-  friendHintText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18, marginBottom: 6 },
+  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: radius - 4, alignItems: 'center' },
+  toggleBtnActive: { backgroundColor: colors.accentCoral },
+  toggleBtnText: { color: colors.textMuted, fontSize: 13, fontWeight: fontWeight.medium },
+  toggleBtnTextActive: { color: colors.onGradient },
+  hintText: { color: colors.textMuted, fontSize: 13, lineHeight: 18, marginBottom: 6 },
   primaryBtn: {
-    height: 48, backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-    marginTop: 8,
+    height: 48, backgroundColor: colors.accentCoral,
+    borderRadius: radius, alignItems: 'center', justifyContent: 'center', marginTop: 8,
   },
-  primaryBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 14 },
+  primaryBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 14 },
   searchRow: { flexDirection: 'row', gap: 10 },
   searchInput: {
     flex: 1, height: 48,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, paddingHorizontal: 14, color: '#fff', fontSize: 15,
+    backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 14, color: colors.text, fontSize: 15,
   },
   searchBtn: {
-    height: 48, backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, paddingHorizontal: 18,
-    alignItems: 'center', justifyContent: 'center',
+    height: 48, backgroundColor: colors.accentCoral,
+    borderRadius: radius, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center',
   },
-  searchBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 14 },
-  errorText: {
-    color: '#ffb4b4', fontSize: 13, fontWeight: '600', marginTop: 12,
-  },
+  searchBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 14 },
+  errorText: { color: colors.danger, fontSize: 13, fontWeight: fontWeight.medium, marginTop: 12 },
   matchRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16 },
-  matchName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
-  sendBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9,
+  matchName: { flex: 1, color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
+  resultRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12,
   },
-  sendBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 13 },
+  resultRowDivider: { borderTopColor: colors.border, borderTopWidth: 1 },
+  sendBtn: {
+    backgroundColor: colors.accentCoral,
+    borderRadius: radius, paddingHorizontal: 14, paddingVertical: 9,
+  },
+  sendBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 13 },
 });

@@ -2,7 +2,10 @@
 // Goal: prove audio round-trips. I speak Spanish -> Gemini Live replies in
 // spoken Mexican Spanish, in real time, over a direct WebSocket.
 // NOT the real tutor. No scenario logic, no persona depth, no saving.
-// Reachable via a temporary dev button on Profile.
+//
+// TODO(stt-1.1): the dev entry point (Home button + VoiceSpike route) was
+// removed. This file is kept for the future voice-tutor work; re-wire an entry
+// point when speech recognition returns.
 import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,

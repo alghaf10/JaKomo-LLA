@@ -15,6 +15,13 @@ export const colors = {
   accentCoralTint: 'rgba(216,90,48,0.12)', // faint coral wash for badges/highlights on light
   accentPink: '#D4537E', // lighter accent
 
+  // Answer/result states — warm, harmonized with the coral/pink/purple family
+  // (deliberately NOT iOS system green/red). Used for quiz/flashcard feedback.
+  success: '#3E9E7A', // warm sage green
+  successTint: 'rgba(62,158,122,0.15)',
+  danger: '#BE3B39', // warm brick red (distinct from the orange coral accent)
+  dangerTint: 'rgba(190,59,57,0.15)',
+
   // Surfaces.
   bg: '#FAF7F2', // warm off-white content background (not stark white)
   card: '#FFFFFF', // card surface

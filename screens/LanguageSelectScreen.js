@@ -20,8 +20,13 @@ const withTimeout = (promise, ms) => Promise.race([
   }),
 ]);
 
-export default function LanguageSelectScreen({ navigation }) {
+export default function LanguageSelectScreen({ navigation, route }) {
   const [savingCode, setSavingCode] = useState(null);
+  // Entered from Profile (established user changing language) vs. the first-run
+  // onboarding gate. From Profile this screen is pushed ON TOP of the already-
+  // mounted MainTabs, so routing forward with replace('MainTabs') would mount a
+  // SECOND MainTabs (duplicate nested navigator → crash). Go back instead.
+  const fromProfile = route.params?.fromProfile;
 
   const handleSelect = async (code) => {
     setSavingCode(code);
@@ -47,7 +52,17 @@ export default function LanguageSelectScreen({ navigation }) {
       console.log('Language save failed or timed out:', error);
     }
     setSavingCode(null);
-    navigation.replace(nextRoute);
+
+    // First-run/onboarding gate: route forward via the resolver (unchanged).
+    // From Profile: return to where we came from. The canGoBack() guard closes
+    // the bug class — if some future entry point reaches this screen with no
+    // stack beneath it, fall back to replace('MainTabs') rather than crash.
+    if (fromProfile) {
+      if (navigation.canGoBack()) navigation.goBack();
+      else navigation.replace('MainTabs');
+    } else {
+      navigation.replace(nextRoute);
+    }
   };
 
   return (

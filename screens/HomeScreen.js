@@ -13,6 +13,7 @@ import { getAvatarSource } from '../lib/avatars';
 import { fetchLearningPlan, generateLearningPlan, shouldOfferRegeneration } from '../lib/learningPlan';
 import GradientHeader from '../components/GradientHeader';
 import Card from '../components/Card';
+import LessonBadge from '../components/LessonBadge';
 import { colors, spacing, radius, fontSize, fontWeight } from '../theme';
 
 export default function HomeScreen({ navigation }) {
@@ -111,12 +112,7 @@ export default function HomeScreen({ navigation }) {
             <Image source={getAvatarSource(profile?.avatar_id)} style={styles.avatarImage} />
           </TouchableOpacity>
         )}
-      >
-        <View style={styles.locationPill}>
-          <Ionicons name="location-outline" size={14} color={colors.onGradient} />
-          <Text style={styles.locationText}>Guanajuato</Text>
-        </View>
-      </GradientHeader>
+      />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Streak */}
@@ -126,16 +122,6 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.streakText}>{streakDays}</Text>
             <Text style={styles.streakLabel}>day streak</Text>
           </Card>
-        </TouchableOpacity>
-
-        {/* TODO: remove after Phase 3a spike — temporary dev entry point */}
-        <TouchableOpacity
-          style={styles.devSpikeBtn}
-          onPress={() => navigation.navigate('VoiceSpike')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="mic-outline" size={16} color={colors.accentCoral} />
-          <Text style={styles.devSpikeText}>Voice spike (dev)</Text>
         </TouchableOpacity>
 
         {/* Learning plan */}
@@ -206,8 +192,7 @@ export default function HomeScreen({ navigation }) {
                   activeOpacity={0.8}
                 >
                   <Card style={[styles.tile, !lesson.unlocked && styles.tileLocked]}>
-                    {/* lesson.emoji is CONTENT — kept as emoji on purpose. */}
-                    <Text style={styles.tileEmoji}>{lesson.emoji}</Text>
+                    <LessonBadge lessonId={lesson.id} size={44} style={styles.tileBadge} />
                     <Text
                       style={[styles.tileLabel, !lesson.unlocked && styles.textLocked]}
                       numberOfLines={2}
@@ -243,8 +228,7 @@ export default function HomeScreen({ navigation }) {
               activeOpacity={0.8}
             >
               <Card style={[styles.lessonCard, !lesson.unlocked && styles.tileLocked]}>
-                {/* lesson.emoji is CONTENT — kept as emoji on purpose. */}
-                <Text style={styles.lessonEmoji}>{lesson.emoji}</Text>
+                <LessonBadge lessonId={lesson.id} size={40} style={styles.lessonBadge} />
                 <View style={styles.lessonTextContainer}>
                   <Text style={[styles.lessonTitle, !lesson.unlocked && styles.textLocked]}>
                     {lesson.title}
@@ -280,17 +264,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  locationPill: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
-    backgroundColor: colors.glassFill,
-    borderColor: colors.glassBorder, borderWidth: 0.5,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2,
-    borderRadius: radius, marginTop: spacing.lg,
-  },
-  locationText: {
-    color: colors.onGradient, fontSize: fontSize.caption,
-    fontWeight: fontWeight.medium, marginLeft: spacing.xs + 2,
-  },
   streakCard: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
     paddingVertical: spacing.md, marginBottom: spacing.lg,
@@ -303,17 +276,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.regular,
     marginLeft: spacing.sm,
   },
-  devSpikeBtn: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
-    backgroundColor: colors.card,
-    borderColor: colors.border, borderWidth: 0.5,
-    borderRadius: radius, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  devSpikeText: {
-    color: colors.accentCoral, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
-    marginLeft: spacing.xs + 2,
-  },
   sectionTitle: {
     color: colors.text, fontSize: fontSize.header, fontWeight: fontWeight.medium,
     marginBottom: spacing.md,
@@ -325,7 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   tileLocked: { opacity: 0.55 },
-  tileEmoji: { fontSize: 28, marginBottom: spacing.xs + 2 },
+  tileBadge: { marginBottom: spacing.xs + 2 },
   tileLabel: {
     color: colors.text, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
     textAlign: 'center', marginTop: spacing.xs + 2,
@@ -353,7 +315,7 @@ const styles = StyleSheet.create({
   lessonCard: {
     flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md,
   },
-  lessonEmoji: { fontSize: 26, marginRight: spacing.lg },
+  lessonBadge: { marginRight: spacing.lg },
   lessonTextContainer: { flex: 1 },
   lessonTitle: { color: colors.text, fontSize: fontSize.body, fontWeight: fontWeight.medium },
   lessonSubtitle: {

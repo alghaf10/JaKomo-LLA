@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import GlassCard from '../GlassCard';
 import { isAcceptable } from '../../lib/answerCheck';
 import { isSpeechRecognitionAvailable, recognizeOnce } from '../../lib/speechRecognition';
 import { colors } from '../../theme';
 import { stepStyles as s, HearButton } from './common';
+// Note: feedback uses the light themed card (s.card) — no GlassCard here.
 
 // Gradable: say `phrase`; on-device STT transcribes; graded via fuzzy match.
 // The STT provider sits behind lib/speechRecognition (stubbed until the native
@@ -44,7 +44,7 @@ export default function SpeakStep({ step, language, speechRate, onResolve }) {
       {available && !answered ? (
         <TouchableOpacity style={s.checkBtn} onPress={handleMic} disabled={answered}>
           <View style={s.iconRow}>
-            <Ionicons name="mic" size={18} color={colors.text} style={s.iconLeft} />
+            <Ionicons name="mic" size={18} color={colors.onGradient} style={s.iconLeft} />
             <Text style={s.checkBtnText}>Tap to speak</Text>
           </View>
         </TouchableOpacity>
@@ -62,7 +62,7 @@ export default function SpeakStep({ step, language, speechRate, onResolve }) {
             value={sim}
             onChangeText={setSim}
             placeholder="Type what you'd say"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -77,14 +77,14 @@ export default function SpeakStep({ step, language, speechRate, onResolve }) {
       ) : null}
 
       {answered ? (
-        <GlassCard style={s.feedbackCard} overlayColor="rgba(0,0,0,0.25)">
+        <View style={[s.card, s.feedbackCard]}>
           <Text style={s.feedbackText}>
             {`Heard: "${heard}"\n`}
             {correct
               ? (step.feedbackCorrect || '¡Perfecto! That sounded great.')
               : (step.feedbackWrong || `Close — aim for "${step.phrase}".`)}
           </Text>
-        </GlassCard>
+        </View>
       ) : (
         <View />
       )}

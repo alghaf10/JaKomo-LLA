@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
-import BACKGROUNDS from '../lib/backgrounds';
 import { fetchProfile, claimUsername, resolveAuthedRoute } from '../lib/profiles';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
+import SolidButton from '../components/SolidButton';
 import UsernameField from '../components/UsernameField';
+import {
+  colors, gradient, spacing, fontSize, fontWeight,
+} from '../theme';
 
 const SAVE_TIMEOUT_MS = 5000;
 
@@ -32,8 +34,6 @@ export default function ChooseUsernameScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Legacy no-row accounts still need language + profile completion, so send
-  // them to LanguageSelect rather than the resolver's not-trap MainTabs.
   const nextRoute = (profileData) => (profileData ? resolveAuthedRoute(profileData) : 'LanguageSelect');
 
   useEffect(() => {
@@ -48,9 +48,6 @@ export default function ChooseUsernameScreen({ navigation }) {
       const { data: profileData } = await fetchProfile(userData.user.id);
       setProfile(profileData);
 
-      // Already has one (claimed on another device), or has no profiles row
-      // at all (legacy account — a username can't be claimed via UPDATE; the
-      // "Complete your profile" flow collects it instead). Either way, move on.
       if (!profileData || profileData.username) {
         navigation.replace(nextRoute(profileData));
         return;
@@ -90,76 +87,62 @@ export default function ChooseUsernameScreen({ navigation }) {
   };
 
   return (
-    <ImageBackground source={BACKGROUNDS.languageSelect} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
-          >
-            <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              <Text style={styles.title}>Choose your username</Text>
-              <Text style={styles.subtitle}>
-                Friends can now find you by username instead of a code. Pick yours once — it's how
-                people will know you across JaKomo.
-              </Text>
+    <LinearGradient
+      colors={gradient.colors}
+      locations={gradient.locations}
+      start={gradient.start}
+      end={gradient.end}
+      style={styles.screen}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.flex}
+      >
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>Choose your username</Text>
+          <Text style={styles.subtitle}>
+            Friends can now find you by username instead of a code. Pick yours once — it&apos;s how
+            people will know you across JaKomo.
+          </Text>
 
-              {checkingProfile ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <GlassCard style={styles.card}>
-                  <UsernameField
-                    value={username}
-                    onChangeText={setUsername}
-                    editable={!saving}
-                    onStatusChange={setUsernameStatus}
-                  />
-                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                  <TouchableOpacity
-                    style={[styles.primaryBtn, usernameStatus !== 'available' && styles.primaryBtnDisabled]}
-                    onPress={handleSave}
-                    disabled={usernameStatus !== 'available' || saving}
-                  >
-                    {saving ? (
-                      <ActivityIndicator color="#1a1a1a" />
-                    ) : (
-                      <Text style={styles.primaryBtnText}>Claim username</Text>
-                    )}
-                  </TouchableOpacity>
-                </GlassCard>
-              )}
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+          {checkingProfile ? (
+            <ActivityIndicator color={colors.onGradient} />
+          ) : (
+            <Card style={styles.card}>
+              <UsernameField
+                value={username}
+                onChangeText={setUsername}
+                editable={!saving}
+                onStatusChange={setUsernameStatus}
+              />
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              <SolidButton
+                label={saving ? '' : 'Claim username'}
+                onPress={handleSave}
+                disabled={usernameStatus !== 'available' || saving}
+                style={styles.claimBtn}
+              />
+              {saving ? <ActivityIndicator color={colors.accentCoral} style={styles.claimSpinner} /> : null}
+            </Card>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
-  title: {
-    fontSize: 28, fontWeight: '800', color: '#fff', marginBottom: 8, ...textShadow,
-  },
-  subtitle: {
-    fontSize: 15, color: 'rgba(255,255,255,0.85)', marginBottom: 28, lineHeight: 21,
-  },
-  card: { padding: 18 },
-  errorText: {
-    color: '#ffb4b4', fontSize: 13, fontWeight: '600', marginBottom: 10,
-  },
-  primaryBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, padding: 15, alignItems: 'center', marginTop: 6,
-  },
-  primaryBtnDisabled: { opacity: 0.5 },
-  primaryBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 15 },
+  screen: { flex: 1 },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: spacing.xl, paddingVertical: 40 },
+  title: { fontSize: 28, fontWeight: fontWeight.medium, color: colors.onGradient, marginBottom: 8 },
+  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.9)', marginBottom: 28, lineHeight: 21 },
+  card: {},
+  errorText: { color: colors.danger, fontSize: 13, fontWeight: fontWeight.medium, marginBottom: 10 },
+  claimBtn: { marginTop: 6 },
+  claimSpinner: { marginTop: 10 },
 });

@@ -1,17 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, Image,
-  StyleSheet, ImageBackground, ScrollView, ActivityIndicator, Alert,
+  StyleSheet, ScrollView, ActivityIndicator, Alert, Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
-import { getBackgrounds } from '../lib/backgrounds';
 import { getLanguage } from '../content';
 import { fetchProfile, findUserByUsername } from '../lib/profiles';
 import { getAvatarSource } from '../lib/avatars';
-import GlassCard, { textShadow } from '../components/GlassCard';
+import Card from '../components/Card';
 import { useSocialBadge } from '../contexts/SocialBadgeContext';
 import {
   lookupProfileByFriendCode, fetchPublicProfiles, fetchFriendshipBetween,
@@ -21,8 +22,12 @@ import {
 import {
   checkOpponentEligibility, createChallenge, findExistingBattleWith, isDuplicateBattleError,
 } from '../lib/battles';
+import {
+  colors, gradient, radius, spacing, fontSize, fontWeight,
+} from '../theme';
 
 export default function FriendsScreen({ navigation, headerContent }) {
+  const insets = useSafeAreaInsets();
   const { refreshPendingRequestCount } = useSocialBadge();
   const [userId, setUserId] = useState(null);
   const [language, setLanguage] = useState(getLanguage());
@@ -43,8 +48,8 @@ export default function FriendsScreen({ navigation, headerContent }) {
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
   const [actioningId, setActioningId] = useState(null);
-
-  const backgrounds = getBackgrounds(language.code);
+  // { friendship, profile } of the friend whose overflow menu is open.
+  const [menuTarget, setMenuTarget] = useState(null);
 
   const loadFriendsData = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -109,8 +114,6 @@ export default function FriendsScreen({ navigation, headerContent }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Shared tail of both lookup paths (username and JK- code): self-check,
-  // existing-relationship check, then surface the match row.
   const processFoundProfile = async (found, selfMessage) => {
     if (found.user_id === userId) {
       setSearching(false);
@@ -159,8 +162,6 @@ export default function FriendsScreen({ navigation, headerContent }) {
       setSearchError('Something went wrong. Please try again.');
       return;
     }
-    // Not found and not-discoverable are deliberately the same message —
-    // the RPC returns nothing for either, so there's no existence leak.
     if (!found) {
       setSearching(false);
       setSearchError('No one found with that username.');
@@ -316,8 +317,6 @@ export default function FriendsScreen({ navigation, headerContent }) {
     setBattlingId(null);
     if (createError) {
       console.log('Error creating challenge:', createError);
-      // Race fallback: the pre-check missed a simultaneous challenge, but
-      // the DB's unique index caught it.
       if (isDuplicateBattleError(createError)) {
         Alert.alert('Battle in progress', `You already have a battle with ${name} — check your Battles list.`);
         return;
@@ -328,334 +327,365 @@ export default function FriendsScreen({ navigation, headerContent }) {
     Alert.alert('Challenge sent!', `${profile.first_name || 'They'} will see it in Battles.`);
   };
 
+  const closeMenu = () => setMenuTarget(null);
+
+  // Both actions carry their own Alert confirmation (handleUnfriend /
+  // handleBlock) — Block's confirm restores the friction it lost by moving
+  // out of the always-visible row into this menu.
+  const menuUnfriend = () => {
+    const target = menuTarget;
+    closeMenu();
+    if (target) handleUnfriend(target.friendship, target.profile);
+  };
+  const menuBlock = () => {
+    const target = menuTarget;
+    closeMenu();
+    if (target) handleBlock(target.friendship, target.profile);
+  };
+
   return (
-    <ImageBackground source={backgrounds.home} style={styles.background}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            {headerContent || (
-              <>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                  <Text style={styles.backBtnText}>←</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Friends</Text>
-              </>
-            )}
+    <View style={styles.screen}>
+      <LinearGradient
+        colors={gradient.colors}
+        locations={gradient.locations}
+        start={gradient.start}
+        end={gradient.end}
+        style={[styles.header, { paddingTop: insets.top + spacing.md }]}
+      >
+        {headerContent || (
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.glassBtn} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={18} color={colors.onGradient} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Friends</Text>
+          </View>
+        )}
+      </LinearGradient>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* My friend code */}
+        <Card style={styles.card}>
+          <Text style={styles.cardLabel}>Your Friend ID</Text>
+          <View style={styles.friendCodeRow}>
+            <Text style={styles.friendCodeText}>{myProfile?.friend_code || '—'}</Text>
+            <TouchableOpacity style={styles.copyBtn} onPress={handleCopyMyCode}>
+              <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy'}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.friendHintText}>Share this so friends can add you</Text>
+        </Card>
+
+        {/* Add a friend */}
+        <Card style={styles.card}>
+          <Text style={styles.cardLabel}>Add a friend</Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Username"
+              placeholderTextColor={colors.textMuted}
+              value={usernameInput}
+              onChangeText={setUsernameInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!searching}
+            />
+            <TouchableOpacity style={styles.searchBtn} onPress={handleUsernameSearch} disabled={searching}>
+              {searching ? (
+                <ActivityIndicator color={colors.onGradient} />
+              ) : (
+                <Text style={styles.searchBtnText}>Search</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {/* My friend code */}
-            <GlassCard style={styles.card}>
-              <Text style={styles.cardLabel}>Your Friend ID</Text>
-              <View style={styles.friendCodeRow}>
-                <Text style={styles.friendCodeText}>{myProfile?.friend_code || '—'}</Text>
-                <TouchableOpacity style={styles.copyBtn} onPress={handleCopyMyCode}>
-                  <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy'}</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.friendHintText}>Share this so friends can add you</Text>
-            </GlassCard>
+          <TouchableOpacity onPress={() => setShowCodeInput((prev) => !prev)}>
+            <Text style={styles.codeToggleText}>
+              {showCodeInput ? 'Hide friend code' : 'Have a friend code?'}
+            </Text>
+          </TouchableOpacity>
 
-            {/* Add a friend */}
-            <GlassCard style={styles.card}>
-              <Text style={styles.cardLabel}>Add a friend</Text>
-              <View style={styles.searchRow}>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Username"
-                  placeholderTextColor="rgba(255,255,255,0.6)"
-                  value={usernameInput}
-                  onChangeText={setUsernameInput}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!searching}
-                />
-                <TouchableOpacity style={styles.searchBtn} onPress={handleUsernameSearch} disabled={searching}>
-                  {searching ? (
-                    <ActivityIndicator color="#1a1a1a" />
-                  ) : (
-                    <Text style={styles.searchBtnText}>Search</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity onPress={() => setShowCodeInput((prev) => !prev)}>
-                <Text style={styles.codeToggleText}>
-                  {showCodeInput ? 'Hide friend code' : 'Have a friend code?'}
-                </Text>
+          {showCodeInput && (
+            <View style={[styles.searchRow, styles.codeSearchRow]}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="JK-XXXXX"
+                placeholderTextColor={colors.textMuted}
+                value={codeInput}
+                onChangeText={setCodeInput}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!searching}
+              />
+              <TouchableOpacity style={styles.searchBtn} onPress={handleCodeSearch} disabled={searching}>
+                {searching ? (
+                  <ActivityIndicator color={colors.onGradient} />
+                ) : (
+                  <Text style={styles.searchBtnText}>Search</Text>
+                )}
               </TouchableOpacity>
+            </View>
+          )}
 
-              {showCodeInput && (
-                <View style={[styles.searchRow, styles.codeSearchRow]}>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="JK-XXXXX"
-                    placeholderTextColor="rgba(255,255,255,0.6)"
-                    value={codeInput}
-                    onChangeText={setCodeInput}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    editable={!searching}
-                  />
-                  <TouchableOpacity style={styles.searchBtn} onPress={handleCodeSearch} disabled={searching}>
-                    {searching ? (
-                      <ActivityIndicator color="#1a1a1a" />
-                    ) : (
-                      <Text style={styles.searchBtnText}>Search</Text>
-                    )}
+          {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
+
+          {searchResult && (
+            <View style={styles.matchRow}>
+              <Image source={getAvatarSource(searchResult.avatar_id)} style={styles.avatar} />
+              <View style={styles.personInfo}>
+                <Text style={styles.personName} numberOfLines={1}>{searchResult.first_name}</Text>
+                {searchResult.username ? (
+                  <Text style={styles.personSub} numberOfLines={1}>@{searchResult.username}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity style={styles.sendBtn} onPress={handleSendRequest} disabled={sendingRequest}>
+                {sendingRequest ? (
+                  <ActivityIndicator color={colors.onGradient} />
+                ) : (
+                  <Text style={styles.sendBtnText}>Send Request</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </Card>
+
+        {/* Requests */}
+        {(incomingRequests.length > 0 || outgoingRequests.length > 0) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Requests</Text>
+
+            {incomingRequests.map(({ friendship, profile }) => (
+              <Card key={friendship.id} style={styles.personRow}>
+                <Image source={getAvatarSource(profile?.avatar_id)} style={styles.avatar} />
+                <View style={styles.personInfo}>
+                  <Text style={styles.personName} numberOfLines={1}>{profile?.first_name || 'Someone'}</Text>
+                </View>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.acceptBtn}
+                    onPress={() => handleAccept(friendship.id)}
+                    disabled={actioningId === friendship.id}
+                  >
+                    <Text style={styles.acceptBtnText}>Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.neutralBtn}
+                    onPress={() => handleRemoveFriendship(friendship.id)}
+                    disabled={actioningId === friendship.id}
+                  >
+                    <Text style={styles.neutralBtnText}>Decline</Text>
                   </TouchableOpacity>
                 </View>
-              )}
+              </Card>
+            ))}
 
-              {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
-
-              {searchResult && (
-                <View style={styles.matchRow}>
-                  <Image source={getAvatarSource(searchResult.avatar_id)} style={styles.matchAvatar} />
-                  <View style={styles.matchInfo}>
-                    <Text style={styles.matchName} numberOfLines={1}>{searchResult.first_name}</Text>
-                    {searchResult.username ? (
-                      <Text style={styles.matchUsername} numberOfLines={1}>@{searchResult.username}</Text>
-                    ) : null}
+            {outgoingRequests.map(({ friendship, profile }) => (
+              <Card key={friendship.id} style={styles.personRow}>
+                <Image source={getAvatarSource(profile?.avatar_id)} style={styles.avatar} />
+                <View style={styles.personInfo}>
+                  <Text style={styles.personName} numberOfLines={1}>{profile?.first_name || 'Someone'}</Text>
+                </View>
+                <View style={styles.actionRow}>
+                  <View style={styles.pendingBadge}>
+                    <Text style={styles.pendingBadgeText}>Pending</Text>
                   </View>
                   <TouchableOpacity
-                    style={styles.sendBtn}
-                    onPress={handleSendRequest}
-                    disabled={sendingRequest}
+                    style={styles.neutralBtn}
+                    onPress={() => handleRemoveFriendship(friendship.id)}
+                    disabled={actioningId === friendship.id}
                   >
-                    {sendingRequest ? (
-                      <ActivityIndicator color="#1a1a1a" />
-                    ) : (
-                      <Text style={styles.sendBtnText}>Send Request</Text>
-                    )}
+                    <Text style={styles.neutralBtnText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
-              )}
-            </GlassCard>
+              </Card>
+            ))}
+          </View>
+        )}
 
-            {/* Requests */}
-            {(incomingRequests.length > 0 || outgoingRequests.length > 0) && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Requests</Text>
-
-                {incomingRequests.map(({ friendship, profile }) => (
-                  <GlassCard key={friendship.id} style={styles.personRow}>
-                    <Image source={getAvatarSource(profile?.avatar_id)} style={styles.personAvatar} />
-                    <View style={styles.personInfo}>
-                      <Text style={styles.personName} numberOfLines={1}>
-                        {profile?.first_name || 'Someone'}
-                      </Text>
-                    </View>
-                    <View style={styles.actionRow}>
-                      <TouchableOpacity
-                        style={styles.acceptBtn}
-                        onPress={() => handleAccept(friendship.id)}
-                        disabled={actioningId === friendship.id}
-                      >
-                        <Text style={styles.acceptBtnText}>Accept</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.neutralBtn}
-                        onPress={() => handleRemoveFriendship(friendship.id)}
-                        disabled={actioningId === friendship.id}
-                      >
-                        <Text style={styles.neutralBtnText}>Decline</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </GlassCard>
-                ))}
-
-                {outgoingRequests.map(({ friendship, profile }) => (
-                  <GlassCard key={friendship.id} style={styles.personRow}>
-                    <Image source={getAvatarSource(profile?.avatar_id)} style={styles.personAvatar} />
-                    <View style={styles.personInfo}>
-                      <Text style={styles.personName} numberOfLines={1}>
-                        {profile?.first_name || 'Someone'}
-                      </Text>
-                    </View>
-                    <View style={styles.actionRow}>
-                      <View style={styles.pendingBadge}>
-                        <Text style={styles.pendingBadgeText}>Pending</Text>
+        {/* Friends */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Friends</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.accentCoral} />
+          ) : friendsList.length === 0 ? (
+            <Text style={styles.emptyText}>No friends yet — add one above!</Text>
+          ) : (
+            friendsList.map(({ friendship, profile }) => (
+              <Card key={friendship.id} style={styles.personRow}>
+                <Image source={getAvatarSource(profile?.avatar_id)} style={styles.avatar} />
+                <View style={styles.personInfo}>
+                  <Text style={styles.personName} numberOfLines={1}>{profile?.first_name || 'Someone'}</Text>
+                </View>
+                <View style={styles.rowRight}>
+                  <TouchableOpacity
+                    style={styles.battleBtn}
+                    onPress={() => handleBattle(profile)}
+                    disabled={battlingId === profile?.user_id}
+                  >
+                    {battlingId === profile?.user_id ? (
+                      <ActivityIndicator color={colors.onGradient} />
+                    ) : (
+                      <View style={styles.battleBtnInner}>
+                        <Ionicons name="flash" size={13} color={colors.onGradient} style={styles.battleIcon} />
+                        <Text style={styles.battleBtnText}>Battle</Text>
                       </View>
-                      <TouchableOpacity
-                        style={styles.neutralBtn}
-                        onPress={() => handleRemoveFriendship(friendship.id)}
-                        disabled={actioningId === friendship.id}
-                      >
-                        <Text style={styles.neutralBtnText}>Cancel</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </GlassCard>
-                ))}
-              </View>
-            )}
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.overflowBtn}
+                    onPress={() => setMenuTarget({ friendship, profile })}
+                    disabled={actioningId === friendship.id}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="ellipsis-vertical" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            ))
+          )}
+        </View>
+      </ScrollView>
 
-            {/* Friends */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Friends</Text>
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : friendsList.length === 0 ? (
-                <Text style={styles.emptyText}>No friends yet — add one above!</Text>
-              ) : (
-                friendsList.map(({ friendship, profile }) => (
-                  <GlassCard key={friendship.id} style={styles.personRow}>
-                    <Image source={getAvatarSource(profile?.avatar_id)} style={styles.personAvatar} />
-                    <View style={styles.personInfo}>
-                      <Text style={styles.personName} numberOfLines={1}>
-                        {profile?.first_name || 'Someone'}
-                      </Text>
-                    </View>
-                    <View style={styles.actionRow}>
-                      <TouchableOpacity
-                        style={styles.battleBtn}
-                        onPress={() => handleBattle(profile)}
-                        disabled={battlingId === profile?.user_id}
-                      >
-                        {battlingId === profile?.user_id ? (
-                          <ActivityIndicator color="#fff" />
-                        ) : (
-                          <Text style={styles.battleBtnText}>⚔️ Battle</Text>
-                        )}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.neutralBtn}
-                        onPress={() => handleUnfriend(friendship, profile)}
-                        disabled={actioningId === friendship.id}
-                      >
-                        <Text style={styles.neutralBtnText}>Unfriend</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.blockBtn}
-                        onPress={() => handleBlock(friendship, profile)}
-                        disabled={actioningId === friendship.id}
-                      >
-                        <Text style={styles.blockBtnText}>Block</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </GlassCard>
-                ))
-              )}
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    </ImageBackground>
+      {/* Overflow menu for a friend row — Unfriend / Block (both destructive). */}
+      <Modal
+        visible={!!menuTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <View style={styles.sheetRoot}>
+          <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={closeMenu} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+            {menuTarget?.profile?.first_name ? (
+              <Text style={styles.sheetName}>{menuTarget.profile.first_name}</Text>
+            ) : null}
+            <TouchableOpacity style={styles.sheetAction} onPress={menuUnfriend}>
+              <Ionicons name="person-remove-outline" size={18} color={colors.danger} style={styles.sheetIcon} />
+              <Text style={styles.sheetDangerText}>Unfriend</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetAction} onPress={menuBlock}>
+              <Ionicons name="ban-outline" size={18} color={colors.danger} style={styles.sheetIcon} />
+              <Text style={styles.sheetDangerText}>Block</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetCancel} onPress={closeMenu}>
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  container: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8,
+    paddingHorizontal: spacing.xl, paddingBottom: spacing.lg,
+    borderBottomLeftRadius: radius * 2, borderBottomRightRadius: radius * 2,
   },
-  backBtn: {
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
+  glassBtn: {
     width: 32, height: 32, borderRadius: 16, marginRight: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.glassFill, borderColor: colors.glassBorder, borderWidth: 0.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  backBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', ...textShadow },
+  headerTitle: { color: colors.onGradient, fontSize: fontSize.header, fontWeight: fontWeight.medium },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
-  card: {
-    padding: 18, marginBottom: 16,
-  },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
+  card: { marginBottom: spacing.lg },
   cardLabel: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700',
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
   },
   friendCodeRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10,
   },
-  friendCodeText: { color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: 1 },
+  friendCodeText: { color: colors.text, fontSize: 22, fontWeight: fontWeight.medium, letterSpacing: 1 },
   copyBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: colors.accentCoralTint,
+    borderColor: colors.accentCoral, borderWidth: 0.5,
+    borderRadius: radius, paddingHorizontal: 14, paddingVertical: 8,
   },
-  copyBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  friendHintText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
+  copyBtnText: { color: colors.accentCoral, fontSize: 13, fontWeight: fontWeight.medium },
+  friendHintText: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   searchRow: { flexDirection: 'row', gap: 10 },
   searchInput: {
     flex: 1, height: 48,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 14, paddingHorizontal: 14, color: '#fff', fontSize: 15,
+    backgroundColor: colors.bg,
+    borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 14, color: colors.text, fontSize: 15,
   },
   searchBtn: {
-    height: 48, backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 14, paddingHorizontal: 18,
+    height: 48, backgroundColor: colors.accentCoral,
+    borderRadius: radius, paddingHorizontal: 18,
     alignItems: 'center', justifyContent: 'center',
   },
-  searchBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 14 },
-  errorText: {
-    color: '#ffb4b4', fontSize: 13, fontWeight: '600', marginTop: 12,
-  },
+  searchBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 14 },
+  errorText: { color: colors.danger, fontSize: 13, fontWeight: fontWeight.medium, marginTop: 12 },
   matchRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16 },
-  matchAvatar: {
-    width: 40, height: 40, borderRadius: 20, marginRight: 12,
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
-  },
-  matchInfo: { flex: 1, marginRight: 8 },
-  matchName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  matchUsername: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 1 },
   codeToggleText: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600',
-    marginTop: 12, marginBottom: 4, textDecorationLine: 'underline',
+    color: colors.accentCoral, fontSize: 13, fontWeight: fontWeight.medium,
+    marginTop: 12, marginBottom: 4,
   },
   codeSearchRow: { marginTop: 8 },
   sendBtn: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9,
+    backgroundColor: colors.accentCoral,
+    borderRadius: radius, paddingHorizontal: 14, paddingVertical: 9,
   },
-  sendBtnText: { color: '#1a1a1a', fontWeight: '700', fontSize: 13 },
+  sendBtnText: { color: colors.onGradient, fontWeight: fontWeight.medium, fontSize: 13 },
   section: { marginBottom: 24 },
-  sectionTitle: {
-    color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 14, ...textShadow,
-  },
-  personRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, marginBottom: 12,
-  },
-  personAvatar: {
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: fontWeight.medium, marginBottom: 14 },
+  personRow: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 12 },
+  avatar: {
     width: 40, height: 40, borderRadius: 20, marginRight: 12,
-    borderColor: 'rgba(255,255,255,0.4)', borderWidth: 1,
+    borderColor: colors.border, borderWidth: 1,
   },
   personInfo: { flex: 1, marginRight: 8 },
-  personName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  acceptBtn: {
-    backgroundColor: 'rgba(76,217,100,0.9)',
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+  personName: { color: colors.text, fontSize: 15, fontWeight: fontWeight.medium },
+  personSub: { color: colors.textMuted, fontSize: 13, marginTop: 1 },
+  // flexShrink:0 keeps the button cluster its natural width so the name
+  // (flex:1) always wins the remaining space and never truncates.
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  rowRight: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
+  overflowBtn: {
+    width: 32, height: 32, marginLeft: 4,
+    alignItems: 'center', justifyContent: 'center',
   },
-  acceptBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  battleBtn: {
-    backgroundColor: 'rgba(255,196,0,0.2)',
-    borderColor: 'rgba(255,196,0,0.6)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
-  },
-  battleBtnText: { color: '#ffc400', fontSize: 12, fontWeight: '700' },
+  acceptBtn: { backgroundColor: colors.success, borderRadius: radius, paddingHorizontal: 12, paddingVertical: 7 },
+  acceptBtnText: { color: colors.onGradient, fontSize: 12, fontWeight: fontWeight.medium },
+  battleBtn: { backgroundColor: colors.accentCoral, borderRadius: radius, paddingHorizontal: 12, paddingVertical: 7 },
+  battleBtnInner: { flexDirection: 'row', alignItems: 'center' },
+  battleIcon: { marginRight: 4 },
+  battleBtnText: { color: colors.onGradient, fontSize: 12, fontWeight: fontWeight.medium },
   neutralBtn: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 12, paddingVertical: 7,
   },
-  neutralBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  blockBtn: {
-    backgroundColor: 'rgba(255,90,90,0.2)',
-    borderColor: 'rgba(255,90,90,0.6)', borderWidth: 1,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
-  },
-  blockBtnText: { color: '#ff8080', fontSize: 12, fontWeight: '700' },
+  neutralBtnText: { color: colors.text, fontSize: 12, fontWeight: fontWeight.medium },
   pendingBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7,
+    backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius, paddingHorizontal: 10, paddingVertical: 7,
   },
-  pendingBadgeText: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '700' },
-  emptyText: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 20 },
+  pendingBadgeText: { color: colors.textMuted, fontSize: 11, fontWeight: fontWeight.medium },
+  emptyText: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
+  // Overflow action sheet.
+  sheetRoot: { flex: 1, justifyContent: 'flex-end' },
+  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radius * 2, borderTopRightRadius: radius * 2,
+    paddingHorizontal: spacing.xl, paddingTop: spacing.md,
+  },
+  sheetName: {
+    color: colors.textMuted, fontSize: fontSize.caption, fontWeight: fontWeight.medium,
+    textTransform: 'uppercase', letterSpacing: 0.5, paddingVertical: spacing.md,
+  },
+  sheetAction: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 16,
+    borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  sheetIcon: { marginRight: 12 },
+  sheetDangerText: { color: colors.danger, fontSize: 16, fontWeight: fontWeight.medium },
+  sheetCancel: { paddingVertical: 16, alignItems: 'center', marginTop: spacing.xs },
+  sheetCancelText: { color: colors.text, fontSize: 16, fontWeight: fontWeight.medium },
 });

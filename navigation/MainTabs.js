@@ -1,9 +1,10 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -12,7 +13,6 @@ import NumbersLessonScreen from '../screens/NumbersLessonScreen';
 import LettersLessonScreen from '../screens/LettersLessonScreen';
 import StreakScreen from '../screens/StreakScreen';
 import LearningPlanScreen from '../screens/LearningPlanScreen';
-import VoiceSpikeScreen from '../screens/VoiceSpikeScreen'; // TODO: remove after Phase 3a spike
 import PracticeScreen from '../screens/PracticeScreen';
 import SocialScreen from '../screens/SocialScreen';
 import GroupDetailScreen from '../screens/GroupDetailScreen';
@@ -20,7 +20,7 @@ import GroupChatScreen from '../screens/GroupChatScreen';
 import BattleScreen from '../screens/BattleScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { SocialBadgeProvider, useSocialBadge } from '../contexts/SocialBadgeContext';
-import { colors } from '../theme';
+import { colors, gradient } from '../theme';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -52,8 +52,19 @@ const tabBarStyleForRoute = (route, hiddenRoutes) => {
   return VISIBLE_TAB_BAR_STYLE;
 };
 
+// Low-opacity brand gradient sits UNDER the dark blur: the frost softens it to
+// a faint coral→purple wash while the dark base keeps icon contrast intact.
 const tabBarBackground = () => (
-  <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+  <View style={StyleSheet.absoluteFill}>
+    <LinearGradient
+      colors={[gradient.colors[0], gradient.colors[2]]} // coral → purple (150°)
+      locations={[0, 1]}
+      start={gradient.start}
+      end={gradient.end}
+      style={[StyleSheet.absoluteFill, { opacity: 0.28 }]}
+    />
+    <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+  </View>
 );
 
 function HomeStackScreen() {
@@ -65,7 +76,6 @@ function HomeStackScreen() {
       <HomeStack.Screen name="LettersLesson" component={LettersLessonScreen} />
       <HomeStack.Screen name="Streak" component={StreakScreen} />
       <HomeStack.Screen name="LearningPlan" component={LearningPlanScreen} />
-      <HomeStack.Screen name="VoiceSpike" component={VoiceSpikeScreen} />{/* TODO: remove after Phase 3a spike */}
     </HomeStack.Navigator>
   );
 }
